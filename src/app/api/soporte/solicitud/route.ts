@@ -31,11 +31,27 @@ function porcentajePorTiempo(minutes: number): { porcentaje: number; regla: stri
   return { porcentaje: 25, regla: "> 4 horas = 25%" };
 }
 
-export async function POST(req: Request) {
+type RequesterAuth =
+  | { mode: "user"; userId: string }
+  | { mode: "apiKey" }
+  | null;
+
+async function authorizeRequester(req: Request): Promise<RequesterAuth> {
+  const apiKey = req.headers.get("x-api-key") || "";
+  const expected = process.env.EXTERNAL_API_KEY || "";
+  if (expected && apiKey === expected) return { mode: "apiKey" };
+
   const jar = await cookies();
   const token = jar.get(authCookieName)?.value;
   const payload = token ? verifyJwt(token) : null;
-  if (!payload) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!payload?.sub) return null;
+
+  return { mode: "user", userId: payload.sub };
+}
+
+export async function POST(req: Request) {
+  const auth = await authorizeRequester(req);
+  if (!auth) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
@@ -44,15 +60,21 @@ export async function POST(req: Request) {
   const canalOficina = body?.canalOficina?.trim();
   const gerencia = body?.gerencia?.trim();
   const descripcion = body?.descripcion?.trim();
+  const bodySolicitante = body?.solicitante?.trim();
 
   if (!tipoServicio || !canalOficina || !gerencia || !descripcion) {
     return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
   }
 
-  const user = await db.query("SELECT full_name, username FROM users WHERE id = $1", [payload.sub]);
-  if (user.rowCount === 0) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+  let solicitante = bodySolicitante || "";
+  if (auth.mode === "user") {
+    const user = await db.query("SELECT full_name, username FROM users WHERE id = $1", [auth.userId]);
+    if (user.rowCount === 0) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    solicitante = user.rows[0].full_name || user.rows[0].username;
+  } else if (!solicitante) {
+    return NextResponse.json({ error: "Campo requerido: solicitante" }, { status: 400 });
+  }
 
-  const solicitante = user.rows[0].full_name || user.rows[0].username;
   const encargado = "SIN_ASIGNAR";
   const createdAt = new Date();
   const { fecha, hora } = toDateParts(createdAt);
