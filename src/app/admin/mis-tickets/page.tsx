@@ -9,6 +9,7 @@ type Ticket = {
   tipo_servicio: string;
   canal_oficina: string;
   gerencia: string;
+  motivo_servicio: string;
   descripcion: string;
   encargado: string;
   fecha_reporte: string;
@@ -33,11 +34,14 @@ type TicketAction = {
 };
 
 type SupportUser = { id: number; name: string };
+type CatalogItem = { id: number; name: string; active: boolean };
+type MotivoItem = CatalogItem & { service_type_id: number };
 type TicketTab = "TODOS" | "EN_ATENCION" | "RESPONDIDO" | "RESUELTO";
 type ReassignStep = "select" | "confirm" | "done";
 
 type EditState = {
   gerencia: string;
+  motivo_servicio: string;
   accion_tomada: string;
   fecha_respuesta: string;
   hora_respuesta: string;
@@ -56,6 +60,9 @@ export default function MisTicketsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [actionText, setActionText] = useState("");
   const [supportUsers, setSupportUsers] = useState<SupportUser[]>([]);
+  const [serviceTypes, setServiceTypes] = useState<CatalogItem[]>([]);
+  const [gerencias, setGerencias] = useState<CatalogItem[]>([]);
+  const [motivos, setMotivos] = useState<MotivoItem[]>([]);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [reassignTicket, setReassignTicket] = useState<Ticket | null>(null);
   const [reassignStep, setReassignStep] = useState<ReassignStep>("select");
@@ -84,6 +91,13 @@ export default function MisTicketsPage() {
     [items]
   );
 
+  const filteredMotivos = useMemo(() => {
+    if (!selected) return [];
+    const serviceType = serviceTypes.find((item) => item.name === selected.tipo_servicio);
+    if (!serviceType) return [];
+    return motivos.filter((item) => item.service_type_id === serviceType.id);
+  }, [motivos, selected, serviceTypes]);
+
   async function fetchTickets() {
     setLoading(true);
     setError(null);
@@ -106,6 +120,26 @@ export default function MisTicketsPage() {
     setSupportUsers(data?.items || []);
   }
 
+  async function loadCatalogs() {
+    const [tipoRes, gerRes, motRes] = await Promise.all([
+      fetch("/api/catalogos/tiposervicio"),
+      fetch("/api/catalogos/gerencia"),
+      fetch("/api/catalogos/motivo"),
+    ]);
+    if (!tipoRes.ok || !gerRes.ok || !motRes.ok) {
+      setError("No se pudieron cargar los catálogos del formulario");
+      return;
+    }
+    const [tipoData, gerData, motData] = await Promise.all([
+      tipoRes.json(),
+      gerRes.json(),
+      motRes.json(),
+    ]);
+    setServiceTypes(tipoData.items || []);
+    setGerencias(gerData.items || []);
+    setMotivos(motData.items || []);
+  }
+
   async function loadHistory(ticketId: number) {
     setHistoryLoading(true);
     const res = await fetch(`/api/tickets/${ticketId}/acciones`);
@@ -124,12 +158,14 @@ export default function MisTicketsPage() {
     loadedRef.current = true;
     void fetchTickets();
     void loadSupportUsers();
+    void loadCatalogs();
   }, []);
 
   function openEdit(ticket: Ticket) {
     setSelected(ticket);
     setEdit({
       gerencia: ticket.gerencia ?? "",
+      motivo_servicio: ticket.motivo_servicio ?? "",
       accion_tomada: ticket.accion_tomada ?? "",
       fecha_respuesta: ticket.fecha_respuesta?.slice(0, 10) || "",
       hora_respuesta: ticket.hora_respuesta?.slice(0, 5) || "",
@@ -148,6 +184,7 @@ export default function MisTicketsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         gerencia: edit.gerencia,
+        motivoServicio: edit.motivo_servicio,
         accionTomada: edit.accion_tomada,
         fechaRespuesta: edit.estado === "RESUELTO" ? edit.fecha_respuesta : undefined,
         horaRespuesta: edit.estado === "RESUELTO" ? edit.hora_respuesta : undefined,
@@ -330,16 +367,45 @@ export default function MisTicketsPage() {
               <div className="split">
                 <label className="field">
                   <span className="label">Gerencia</span>
-                  <input
-                    className="input"
+                  <select
+                    className="select"
                     value={edit.gerencia}
                     onChange={(e) => setEdit({ ...edit, gerencia: e.target.value })}
-                    placeholder="Completar al tomar el ticket"
-                  />
+                  >
+                    <option value="">Seleccionar gerencia...</option>
+                    {edit.gerencia && !gerencias.some((item) => item.name === edit.gerencia) ? (
+                      <option value={edit.gerencia}>{edit.gerencia}</option>
+                    ) : null}
+                    {gerencias.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
                   <span className="label">Tipo de registro</span>
                   <input className="input input--readonly" value={selected.tipo_registro || "SOPORTE"} readOnly />
+                </label>
+              </div>
+              <div className="split">
+                <label className="field">
+                  <span className="label">Motivo</span>
+                  <select
+                    className="select"
+                    value={edit.motivo_servicio}
+                    onChange={(e) => setEdit({ ...edit, motivo_servicio: e.target.value })}
+                  >
+                    <option value="">Seleccionar motivo...</option>
+                    {edit.motivo_servicio && !filteredMotivos.some((item) => item.name === edit.motivo_servicio) ? (
+                      <option value={edit.motivo_servicio}>{edit.motivo_servicio}</option>
+                    ) : null}
+                    {filteredMotivos.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
               <div className="split">
