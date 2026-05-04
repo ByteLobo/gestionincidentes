@@ -4,13 +4,6 @@ import { MotivoAdmin } from "@/components/MotivoAdmin";
 export default function CatalogosPage() {
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Catálogos y parámetros</h1>
-        <p className="page-subtitle">
-          Administra valores configurables para el formulario de Incidentes y Soporte.
-        </p>
-      </header>
-
       <CatalogAdmin
         catalogo="tiposervicio"
         titulo="Tipo de servicio"

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getActorName, requireAuthContext } from "@/lib/security";
 
 function toDateTime(date: string, time: string): Date | null {
   if (!date || !time) return null;
@@ -28,6 +29,9 @@ function porcentajePorTiempo(minutes: number): { porcentaje: number; regla: stri
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAuthContext();
+  if (!auth) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
 
@@ -109,7 +113,7 @@ export async function POST(req: Request) {
       body.gerencia,
       body.motivoServicio,
       body.descripcion,
-      body.encargado,
+      getActorName(auth),
       body.fechaReporte,
       body.horaReporte,
       body.fechaRespuesta,

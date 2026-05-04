@@ -197,191 +197,211 @@ export function IncidentForm({ defaultTipoRegistro = "INCIDENTE" }: Props) {
     <form onSubmit={handleSubmit(onSubmit)} className="form">
       {catalogError && <p className="error">{catalogError}</p>}
 
-      <div className="split">
-        <div className="field">
-          <label className="label">Tipo de registro *</label>
-          <select className="select" {...register("tipoRegistro", { required: "Requerido" })}>
-            <option value="INCIDENTE">Incidente</option>
-            <option value="SOPORTE">Soporte</option>
-          </select>
-          {errors.tipoRegistro && <span className="error">{errors.tipoRegistro.message}</span>}
+      <section className="form-section">
+        <div className="form-section__header">
+          <h2 className="form-section__title">Contexto del incidente</h2>
+          <p className="form-section__copy">Define quién reporta, por dónde entra y cómo debe clasificarse.</p>
         </div>
+        <div className="split">
+          <div className="field">
+            <label className="label">Tipo de registro *</label>
+            <select className="select" {...register("tipoRegistro", { required: "Requerido" })}>
+              <option value="INCIDENTE">Incidente</option>
+              <option value="SOPORTE">Soporte</option>
+            </select>
+            {errors.tipoRegistro && <span className="error">{errors.tipoRegistro.message}</span>}
+          </div>
 
-        <div className="field">
-          <label className="label">Usuario solicitante *</label>
-          <input className="input" {...register("solicitante", { required: "Requerido" })} />
-          {errors.solicitante && <span className="error">{errors.solicitante.message}</span>}
-        </div>
+          <div className="field">
+            <label className="label">Usuario solicitante *</label>
+            <input className="input" {...register("solicitante", { required: "Requerido" })} />
+            {errors.solicitante && <span className="error">{errors.solicitante.message}</span>}
+          </div>
 
-        <div className="field">
-          <label className="label">Tipo de servicio *</label>
-          <select
-            className="select"
-            {...register("tipoServicio", { required: "Requerido" })}
-            disabled={catalogLoading}
-          >
-            <option value="">Seleccionar...</option>
-            {serviceTypes.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
+          <div className="field">
+            <label className="label">Tipo de servicio *</label>
+            <select
+              className="select"
+              {...register("tipoServicio", { required: "Requerido" })}
+              disabled={catalogLoading}
+            >
+              <option value="">Seleccionar...</option>
+              {serviceTypes.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.tipoServicio && <span className="error">{errors.tipoServicio.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Canal/Oficina *</label>
+            <select
+              className="select"
+              {...register("canalOficina", { required: "Requerido" })}
+              disabled={catalogLoading}
+            >
+              <option value="">Seleccionar...</option>
+              {channels.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.canalOficina && <span className="error">{errors.canalOficina.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Gerencia *</label>
+            <select className="select" {...register("gerencia", { required: "Requerido" })} disabled={catalogLoading}>
+              <option value="">Seleccionar...</option>
+              {gerencias.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.gerencia && <span className="error">{errors.gerencia.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Motivo de servicio *</label>
+            <select
+              className="select"
+              {...register("motivoServicio", { required: "Requerido" })}
+              disabled={catalogLoading || !selectedTipoServicio}
+            >
+              <option value="">
+                {selectedTipoServicio ? "Seleccionar..." : "Selecciona un tipo de servicio primero"}
               </option>
-            ))}
-          </select>
-          {errors.tipoServicio && <span className="error">{errors.tipoServicio.message}</span>}
+              {filteredMotivos.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.motivoServicio && <span className="error">{errors.motivoServicio.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Encargado del incidente *</label>
+            <input
+              className="input input--readonly"
+              readOnly
+              value={userName}
+              {...register("encargado", { required: "Requerido" })}
+            />
+            {errors.encargado && <span className="error">{errors.encargado.message}</span>}
+          </div>
+        </div>
+      </section>
+
+      <section className="form-section">
+        <div className="form-section__header">
+          <h2 className="form-section__title">Detalle y tiempos</h2>
+          <p className="form-section__copy">Registra lo ocurrido y la ventana exacta de atención.</p>
+        </div>
+        <div className="field">
+          <label className="label">Descripción del incidente *</label>
+          <textarea className="textarea" {...register("descripcion", { required: "Requerido" })} />
+          {errors.descripcion && <span className="error">{errors.descripcion.message}</span>}
         </div>
 
+        <div className="split">
+          <div className="field">
+            <label className="label">Fecha de reporte *</label>
+            <input className="input" type="date" {...register("fechaReporte", { required: "Requerido" })} />
+            {errors.fechaReporte && <span className="error">{errors.fechaReporte.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Hora de reporte *</label>
+            <input className="input" type="time" {...register("horaReporte", { required: "Requerido" })} />
+            {errors.horaReporte && <span className="error">{errors.horaReporte.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Fecha de respuesta *</label>
+            <input
+              className="input"
+              type="date"
+              {...register("fechaRespuesta", {
+                required: "Requerido",
+                validate: (value) => {
+                  const start = toDateTime(fechaReporte, horaReporte);
+                  const end = toDateTime(value, horaRespuesta);
+                  if (!start || !end) return true;
+                  return end.getTime() >= start.getTime() || "La respuesta no puede ser anterior al reporte";
+                },
+              })}
+            />
+            {errors.fechaRespuesta && <span className="error">{errors.fechaRespuesta.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Hora de respuesta *</label>
+            <input
+              className="input"
+              type="time"
+              {...register("horaRespuesta", {
+                required: "Requerido",
+                validate: (value) => {
+                  const start = toDateTime(fechaReporte, horaReporte);
+                  const end = toDateTime(fechaRespuesta, value);
+                  if (!start || !end) return true;
+                  return end.getTime() >= start.getTime() || "La respuesta no puede ser anterior al reporte";
+                },
+              })}
+            />
+            {errors.horaRespuesta && <span className="error">{errors.horaRespuesta.message}</span>}
+          </div>
+        </div>
+      </section>
+
+      <section className="form-section">
+        <div className="form-section__header">
+          <h2 className="form-section__title">Resolución y cumplimiento</h2>
+          <p className="form-section__copy">Documenta la solución aplicada y verifica el impacto sobre el KPI.</p>
+        </div>
         <div className="field">
-          <label className="label">Canal/Oficina *</label>
-          <select
-            className="select"
-            {...register("canalOficina", { required: "Requerido" })}
-            disabled={catalogLoading}
-          >
-            <option value="">Seleccionar...</option>
-            {channels.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.canalOficina && <span className="error">{errors.canalOficina.message}</span>}
+          <label className="label">Acción tomada / solución aplicada *</label>
+          <textarea className="textarea" {...register("accionTomada", { required: "Requerido" })} />
+          {errors.accionTomada && <span className="error">{errors.accionTomada.message}</span>}
         </div>
 
-        <div className="field">
-          <label className="label">Gerencia *</label>
-          <select className="select" {...register("gerencia", { required: "Requerido" })} disabled={catalogLoading}>
-            <option value="">Seleccionar...</option>
-            {gerencias.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.gerencia && <span className="error">{errors.gerencia.message}</span>}
-        </div>
+        <div className="split">
+          <div className="field">
+            <label className="label">Resuelta en el primer contacto *</label>
+            <select className="select" {...register("primerContacto", { required: "Requerido" })}>
+              <option value="NO">No</option>
+              <option value="SI">Sí</option>
+            </select>
+          </div>
 
-        <div className="field">
-          <label className="label">Motivo de servicio *</label>
-          <select
-            className="select"
-            {...register("motivoServicio", { required: "Requerido" })}
-            disabled={catalogLoading || !selectedTipoServicio}
-          >
-            <option value="">
-              {selectedTipoServicio ? "Seleccionar..." : "Selecciona un tipo de servicio primero"}
-            </option>
-            {filteredMotivos.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.motivoServicio && <span className="error">{errors.motivoServicio.message}</span>}
-        </div>
+          <div className="field">
+            <label className="label">Tiempo transcurrido (auto)</label>
+            <input className="input input--readonly" readOnly value={duration ?? "--"} />
+            {duration === "ERROR" && <span className="error">La respuesta no puede ser anterior al reporte.</span>}
+          </div>
 
-        <div className="field">
-          <label className="label">Encargado del incidente *</label>
-          <input
-            className="input input--readonly"
-            readOnly
-            value={userName}
-            {...register("encargado", { required: "Requerido" })}
-          />
-          {errors.encargado && <span className="error">{errors.encargado.message}</span>}
+          <div className="field">
+            <label className="label">Categoría por tiempo (auto)</label>
+            <input className="input input--readonly" readOnly value={categoriaTiempo} />
+          </div>
+
+          <div className="field">
+            <label className="label">KPI de cumplimiento (auto)</label>
+            <input className="input input--readonly" readOnly value={porcentajeKpi} />
+          </div>
         </div>
+      </section>
+
+      <div className="actions-row">
+        <button type="submit" disabled={isSubmitting} className="button">
+          Guardar registro
+        </button>
       </div>
-
-      <div className="field">
-        <label className="label">Descripción del incidente *</label>
-        <textarea className="textarea" {...register("descripcion", { required: "Requerido" })} />
-        {errors.descripcion && <span className="error">{errors.descripcion.message}</span>}
-      </div>
-
-      <div className="split">
-        <div className="field">
-          <label className="label">Fecha de reporte *</label>
-          <input className="input" type="date" {...register("fechaReporte", { required: "Requerido" })} />
-          {errors.fechaReporte && <span className="error">{errors.fechaReporte.message}</span>}
-        </div>
-
-        <div className="field">
-          <label className="label">Hora de reporte *</label>
-          <input className="input" type="time" {...register("horaReporte", { required: "Requerido" })} />
-          {errors.horaReporte && <span className="error">{errors.horaReporte.message}</span>}
-        </div>
-
-        <div className="field">
-          <label className="label">Fecha de respuesta *</label>
-          <input
-            className="input"
-            type="date"
-            {...register("fechaRespuesta", {
-              required: "Requerido",
-              validate: (value) => {
-                const start = toDateTime(fechaReporte, horaReporte);
-                const end = toDateTime(value, horaRespuesta);
-                if (!start || !end) return true;
-                return end.getTime() >= start.getTime() || "La respuesta no puede ser anterior al reporte";
-              },
-            })}
-          />
-          {errors.fechaRespuesta && <span className="error">{errors.fechaRespuesta.message}</span>}
-        </div>
-
-        <div className="field">
-          <label className="label">Hora de respuesta *</label>
-          <input
-            className="input"
-            type="time"
-            {...register("horaRespuesta", {
-              required: "Requerido",
-              validate: (value) => {
-                const start = toDateTime(fechaReporte, horaReporte);
-                const end = toDateTime(fechaRespuesta, value);
-                if (!start || !end) return true;
-                return end.getTime() >= start.getTime() || "La respuesta no puede ser anterior al reporte";
-              },
-            })}
-          />
-          {errors.horaRespuesta && <span className="error">{errors.horaRespuesta.message}</span>}
-        </div>
-      </div>
-
-      <div className="field">
-        <label className="label">Acción tomada / solución aplicada *</label>
-        <textarea className="textarea" {...register("accionTomada", { required: "Requerido" })} />
-        {errors.accionTomada && <span className="error">{errors.accionTomada.message}</span>}
-      </div>
-
-      <div className="split">
-        <div className="field">
-          <label className="label">Resuelta en el primer contacto *</label>
-          <select className="select" {...register("primerContacto", { required: "Requerido" })}>
-            <option value="NO">No</option>
-            <option value="SI">Sí</option>
-          </select>
-        </div>
-
-        <div className="field">
-          <label className="label">Tiempo transcurrido (auto)</label>
-          <input className="input input--readonly" readOnly value={duration ?? "--"} />
-          {duration === "ERROR" && <span className="error">La respuesta no puede ser anterior al reporte.</span>}
-        </div>
-
-        <div className="field">
-          <label className="label">Categoría por tiempo (auto)</label>
-          <input className="input input--readonly" readOnly value={categoriaTiempo} />
-        </div>
-
-        <div className="field">
-          <label className="label">KPI de cumplimiento (auto)</label>
-          <input className="input input--readonly" readOnly value={porcentajeKpi} />
-        </div>
-      </div>
-
-      <button type="submit" disabled={isSubmitting} className="button">
-        Guardar registro
-      </button>
 
       {submitMessage && <p className={submitMessage.includes("correctamente") ? "success" : "error"}>{submitMessage}</p>}
     </form>

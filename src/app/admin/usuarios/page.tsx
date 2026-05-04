@@ -50,7 +50,10 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => {
-    void load();
+    async function loadUsers() {
+      await load();
+    }
+    void loadUsers();
   }, []);
 
   async function createUser(e: React.FormEvent) {
@@ -122,61 +125,84 @@ export default function UsuariosPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Usuarios</h1>
-        <p className="page-subtitle">Creación y administración de usuarios.</p>
-      </header>
+      <section className="hero-panel">
+        <div className="hero-panel__content">
+          <div className="page-header">
+            <span className="page-kicker">Accesos</span>
+            <h1 className="page-title">Usuarios y roles</h1>
+            <p className="page-subtitle">
+              Alta, edición y activación de usuarios con múltiples roles para los distintos flujos del sistema.
+            </p>
+          </div>
+          <div className="metric-strip">
+            <div className="metric">
+              <span>Usuarios</span>
+              <strong>{items.length}</strong>
+            </div>
+            <div className="metric">
+              <span>Control</span>
+              <strong>Roles múltiples</strong>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="card">
         <form className="form" onSubmit={createUser}>
-          <div className="split">
-            <label className="field">
-              <span className="label">Usuario</span>
-              <input className="input" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span className="label">Nombre completo</span>
-              <input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span className="label">Email</span>
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span className="label">Rol</span>
-              <select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                <option value="SOLICITANTE">Solicitante</option>
-                <option value="SOPORTE">Soporte</option>
-                <option value="SUPERVISOR">Supervisor</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-            </label>
-            <label className="field">
-              <span className="label">Roles (múltiples)</span>
-              <div className="roles-grid">
-                {["SOLICITANTE", "SOPORTE", "SUPERVISOR", "ADMIN"].map((role) => (
-                  <label key={role} className="role-chip">
-                    <input
-                      type="checkbox"
-                      checked={form.roles.includes(role)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...form.roles, role]
-                          : form.roles.filter((r) => r !== role);
-                        const finalRoles = next.length ? next : ["SOLICITANTE"];
-                        const baseRole = finalRoles.includes(form.role) ? form.role : finalRoles[0];
-                        setForm({ ...form, roles: finalRoles, role: baseRole });
-                      }}
-                    />
-                    <span>{role}</span>
-                  </label>
-                ))}
-              </div>
-            </label>
-            <label className="field">
-              <span className="label">Contraseña</span>
-              <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-            </label>
+          <div className="form-section">
+            <div className="form-section__header">
+              <h2 className="form-section__title">Nuevo usuario</h2>
+              <p className="form-section__copy">Define identidad, rol base y accesos complementarios.</p>
+            </div>
+            <div className="split">
+              <label className="field">
+                <span className="label">Usuario</span>
+                <input className="input" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+              </label>
+              <label className="field">
+                <span className="label">Nombre completo</span>
+                <input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+              </label>
+              <label className="field">
+                <span className="label">Email</span>
+                <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+              </label>
+              <label className="field">
+                <span className="label">Rol</span>
+                <select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <option value="SOLICITANTE">Solicitante</option>
+                  <option value="SOPORTE">Soporte</option>
+                  <option value="SUPERVISOR">Supervisor</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="label">Roles (múltiples)</span>
+                <div className="roles-grid">
+                  {["SOLICITANTE", "SOPORTE", "SUPERVISOR", "ADMIN"].map((role) => (
+                    <label key={role} className="role-chip">
+                      <input
+                        type="checkbox"
+                        checked={form.roles.includes(role)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...form.roles, role]
+                            : form.roles.filter((r) => r !== role);
+                          const finalRoles = next.length ? next : ["SOLICITANTE"];
+                          const baseRole = finalRoles.includes(form.role) ? form.role : finalRoles[0];
+                          setForm({ ...form, roles: finalRoles, role: baseRole });
+                        }}
+                      />
+                      <span>{role}</span>
+                    </label>
+                  ))}
+                </div>
+              </label>
+              <label className="field">
+                <span className="label">Contraseña</span>
+                <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              </label>
+            </div>
           </div>
           <button className="button" type="submit">Crear usuario</button>
           {error && <p className="error">{error}</p>}
@@ -187,7 +213,7 @@ export default function UsuariosPage() {
         {loading ? (
           <p className="muted">Cargando...</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -211,13 +237,15 @@ export default function UsuariosPage() {
                     <td>{user.role}</td>
                     <td>{(user.roles && user.roles.length ? user.roles : [user.role]).join(", ")}</td>
                     <td>{user.active ? "Sí" : "No"}</td>
-                    <td style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button className="nav-link" onClick={() => openEdit(user)}>
-                        Editar
-                      </button>
-                      <button className="nav-link" onClick={() => toggleActive(user)}>
-                        {user.active ? "Desactivar" : "Activar"}
-                      </button>
+                    <td>
+                      <div className="actions-row">
+                        <button className="nav-link" onClick={() => openEdit(user)}>
+                          Editar
+                        </button>
+                        <button className="nav-link" onClick={() => toggleActive(user)}>
+                          {user.active ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -229,10 +257,11 @@ export default function UsuariosPage() {
 
       {editing && (
         <div className="modal-backdrop">
-          <div className="modal">
-            <h2 className="page-title" style={{ fontSize: "1.4rem" }}>
-              Editar usuario
-            </h2>
+          <div className="modal modal--nested">
+            <div className="page-header">
+              <span className="page-kicker">Edición</span>
+              <h2 className="section-title">Editar usuario</h2>
+            </div>
             <form className="form" onSubmit={saveEdit}>
               <label className="field">
                 <span className="label">Usuario</span>
@@ -306,7 +335,7 @@ export default function UsuariosPage() {
                   onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                 />
               </label>
-              <div style={{ display: "flex", gap: 12 }}>
+              <div className="actions-row">
                 <button className="button" type="submit">
                   Guardar
                 </button>

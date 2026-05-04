@@ -94,16 +94,9 @@ export default function ImportarPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Importar desde CSV</h1>
-        <p className="page-subtitle">
-          Carga masiva de incidentes/soporte a la base de datos desde un archivo CSV.
-        </p>
-      </header>
-
       <section className="card">
         <form className="form" onSubmit={onSubmit}>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div className="actions-row">
             <button className="nav-link" type="button" onClick={downloadTemplate}>
               Descargar plantilla CSV
             </button>
@@ -124,13 +117,13 @@ export default function ImportarPage() {
       </section>
 
       <section className="card">
-        <h2 className="page-title" style={{ fontSize: "1.2rem" }}>Columnas recomendadas</h2>
-        <p className="muted" style={{ marginTop: 8 }}>
+        <h2 className="section-title">Columnas recomendadas</h2>
+        <p className="muted">
           tipo_registro, solicitante, tipo_servicio, canal_oficina, gerencia, motivo_servicio,
           descripcion, encargado, fecha_reporte, hora_reporte, fecha_respuesta, hora_respuesta,
           accion_tomada, primer_contacto, estado.
         </p>
-        <p className="muted" style={{ marginTop: 8 }}>
+        <p className="muted">
           Fechas: dd/mm/yyyy. Hora: HH:mm.
         </p>
       </section>
@@ -143,12 +136,12 @@ export default function ImportarPage() {
 
       {result && (
         <section className="card">
-          <h2 className="page-title" style={{ fontSize: "1.2rem" }}>Resultado</h2>
-          <p className="muted" style={{ marginTop: 8 }}>
+          <h2 className="section-title">Resultado</h2>
+          <p className="muted">
             Total: {result.total} | Insertados: {result.inserted} | Fallidos: {result.failed}
           </p>
           {result.errors.length > 0 && (
-            <div style={{ marginTop: 12, overflowX: "auto" }}>
+            <div className="table-wrap">
               <table className="table">
                 <thead>
                   <tr>

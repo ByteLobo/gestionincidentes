@@ -38,6 +38,35 @@ type RequesterAuth =
   | { mode: "apiKey" }
   | null;
 
+async function resolveCatalogValue(
+  value: unknown,
+  table: string,
+  label: string
+): Promise<{ name: string; id?: number } | { error: string }> {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return { error: `${label} inválido` };
+    const result = await db.query(`SELECT id, name FROM ${table} WHERE id = $1 AND active = true`, [value]);
+    if (result.rowCount === 0) return { error: `${label} no encontrado` };
+    return { id: result.rows[0].id, name: result.rows[0].name };
+  }
+
+  if (typeof value !== "string") {
+    return { error: `${label} requerido` };
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return { error: `${label} requerido` };
+
+  if (/^\d+$/.test(trimmed)) {
+    const id = Number(trimmed);
+    const result = await db.query(`SELECT id, name FROM ${table} WHERE id = $1 AND active = true`, [id]);
+    if (result.rowCount === 0) return { error: `${label} no encontrado` };
+    return { id: result.rows[0].id, name: result.rows[0].name };
+  }
+
+  return { name: trimmed };
+}
+
 async function authorizeRequester(req: Request): Promise<RequesterAuth> {
   const apiKey = req.headers.get("x-api-key") || "";
   const expected = process.env.EXTERNAL_API_KEY || "";
@@ -58,13 +87,21 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
 
-  const tipoServicio = body?.tipoServicio?.trim();
-  const canalOficina = body?.canalOficina?.trim();
   const descripcion = body?.descripcion?.trim();
   const bodySolicitante = body?.solicitante?.trim();
 
-  if (!tipoServicio || !canalOficina || !descripcion) {
+  if (body?.tipoServicio == null || body?.canalOficina == null || !descripcion) {
     return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+  }
+
+  const tipoServicio = await resolveCatalogValue(body.tipoServicio, "catalog_service_types", "tipoServicio");
+  if ("error" in tipoServicio) {
+    return NextResponse.json({ error: tipoServicio.error }, { status: 400 });
+  }
+
+  const canalOficina = await resolveCatalogValue(body.canalOficina, "catalog_channels", "canalOficina");
+  if ("error" in canalOficina) {
+    return NextResponse.json({ error: canalOficina.error }, { status: 400 });
   }
 
   let solicitante = bodySolicitante || "";
@@ -113,8 +150,8 @@ export async function POST(req: Request) {
     [
       "SOPORTE",
       solicitante,
-      tipoServicio,
-      canalOficina,
+      tipoServicio.name,
+      canalOficina.name,
       GERENCIA_PENDIENTE,
       "SIN_MOTIVO",
       descripcion,

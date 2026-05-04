@@ -107,75 +107,91 @@ export function SupportRequestForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="form">
       {catalogError && <p className="error">{catalogError}</p>}
 
-      <div className="split">
-        <div className="field">
-          <label className="label">Usuario solicitante *</label>
-          <input
-            className="input input--readonly"
-            readOnly
-            value={userName}
-            {...register("solicitante", { required: "Requerido" })}
-          />
-          {errors.solicitante && <span className="error">{errors.solicitante.message}</span>}
+      <section className="form-section">
+        <div className="form-section__header">
+          <h2 className="form-section__title">Datos de la solicitud</h2>
+          <p className="form-section__copy">Identifica quién reporta y a qué frente operativo debe dirigirse.</p>
+        </div>
+
+        <div className="split">
+          <div className="field">
+            <label className="label">Usuario solicitante *</label>
+            <input
+              className="input input--readonly"
+              readOnly
+              value={userName}
+              {...register("solicitante", { required: "Requerido" })}
+            />
+            {errors.solicitante && <span className="error">{errors.solicitante.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Tipo de servicio *</label>
+            <select
+              className="select"
+              {...register("tipoServicio", { required: "Requerido" })}
+              disabled={catalogLoading}
+            >
+              <option value="">Seleccionar...</option>
+              {serviceTypes.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.tipoServicio && <span className="error">{errors.tipoServicio.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Gerencia *</label>
+            <select className="select" {...register("gerencia", { required: "Requerido" })} disabled={catalogLoading}>
+              <option value="">Seleccionar...</option>
+              {gerencias.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.gerencia && <span className="error">{errors.gerencia.message}</span>}
+          </div>
+
+          <div className="field">
+            <label className="label">Canal / Oficina *</label>
+            <select
+              className="select"
+              {...register("canalOficina", { required: "Requerido" })}
+              disabled={catalogLoading}
+            >
+              <option value="">Seleccionar...</option>
+              {channels.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {errors.canalOficina && <span className="error">{errors.canalOficina.message}</span>}
+          </div>
+        </div>
+      </section>
+
+      <section className="form-section">
+        <div className="form-section__header">
+          <h2 className="form-section__title">Descripción del problema</h2>
+          <p className="form-section__copy">Da al equipo de soporte el contexto necesario para tomar la solicitud.</p>
         </div>
 
         <div className="field">
-          <label className="label">Tipo de servicio *</label>
-          <select
-            className="select"
-            {...register("tipoServicio", { required: "Requerido" })}
-            disabled={catalogLoading}
-          >
-            <option value="">Seleccionar...</option>
-            {serviceTypes.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.tipoServicio && <span className="error">{errors.tipoServicio.message}</span>}
+          <label className="label">Descripción del problema *</label>
+          <textarea className="textarea" {...register("descripcion", { required: "Requerido" })} />
+          {errors.descripcion && <span className="error">{errors.descripcion.message}</span>}
         </div>
+      </section>
 
-        <div className="field">
-          <label className="label">Gerencia *</label>
-          <select className="select" {...register("gerencia", { required: "Requerido" })} disabled={catalogLoading}>
-            <option value="">Seleccionar...</option>
-            {gerencias.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.gerencia && <span className="error">{errors.gerencia.message}</span>}
-        </div>
-
-        <div className="field">
-          <label className="label">Canal / Oficina *</label>
-          <select
-            className="select"
-            {...register("canalOficina", { required: "Requerido" })}
-            disabled={catalogLoading}
-          >
-            <option value="">Seleccionar...</option>
-            {channels.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {errors.canalOficina && <span className="error">{errors.canalOficina.message}</span>}
-        </div>
+      <div className="actions-row">
+        <button type="submit" disabled={!isReady || isSubmitting} className="button">
+          {isSubmitting ? "Enviando..." : "Enviar solicitud"}
+        </button>
       </div>
-
-      <div className="field">
-        <label className="label">Descripción del problema *</label>
-        <textarea className="textarea" {...register("descripcion", { required: "Requerido" })} />
-        {errors.descripcion && <span className="error">{errors.descripcion.message}</span>}
-      </div>
-
-      <button type="submit" disabled={!isReady || isSubmitting} className="button">
-        {isSubmitting ? "Enviando..." : "Enviar solicitud"}
-      </button>
 
       {submitMessage && (
         <p className={submitMessage.includes("correctamente") ? "success" : "error"}>{submitMessage}</p>

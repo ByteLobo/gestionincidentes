@@ -54,7 +54,10 @@ export function MotivoAdmin() {
   useEffect(() => {
     if (loadedRef.current && !showInactive) return;
     loadedRef.current = true;
-    void load();
+    async function run() {
+      await load();
+    }
+    void run();
   }, [endpoint, showInactive]);
 
   async function handleAdd() {
@@ -119,11 +122,10 @@ export function MotivoAdmin() {
   const serviceTypeName = (id: number) => serviceTypes.find((t) => t.id === id)?.name || "--";
 
   return (
-    <section className="card" style={{ display: "grid", gap: 16 }}>
+    <section className="card stack">
       <div className="page-header">
-        <h2 className="page-title" style={{ fontSize: "1.5rem" }}>
-          Motivo de servicio
-        </h2>
+        <span className="page-kicker">Catálogo</span>
+        <h2 className="section-title">Motivo de servicio</h2>
         <p className="page-subtitle">Cada motivo debe estar ligado a un tipo de servicio.</p>
       </div>
 
@@ -180,19 +182,7 @@ export function MotivoAdmin() {
             <p className="muted">Sin registros.</p>
           ) : (
             items.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto auto auto",
-                  gap: 12,
-                  alignItems: "center",
-                  padding: 12,
-                  border: "1px solid var(--border)",
-                  borderRadius: 10,
-                  background: "var(--surface-2)",
-                }}
-              >
+              <div key={item.id} className="list-card">
                 <div>
                   <strong>{item.name}</strong>
                   <span className="muted" style={{ marginLeft: 8 }}>
@@ -200,15 +190,17 @@ export function MotivoAdmin() {
                   </span>
                   {!item.active && <span className="muted" style={{ marginLeft: 8 }}>(inactivo)</span>}
                 </div>
-                <button type="button" className="nav-link" onClick={() => renameItem(item)}>
-                  Renombrar
-                </button>
-                <button type="button" className="nav-link" onClick={() => updateServiceType(item)}>
-                  Cambiar tipo
-                </button>
-                <button type="button" className="nav-link" onClick={() => toggleActive(item)}>
-                  {item.active ? "Desactivar" : "Activar"}
-                </button>
+                <div className="actions-row">
+                  <button type="button" className="nav-link" onClick={() => renameItem(item)}>
+                    Renombrar
+                  </button>
+                  <button type="button" className="nav-link" onClick={() => updateServiceType(item)}>
+                    Cambiar tipo
+                  </button>
+                  <button type="button" className="nav-link" onClick={() => toggleActive(item)}>
+                    {item.active ? "Desactivar" : "Activar"}
+                  </button>
+                </div>
               </div>
             ))
           )}

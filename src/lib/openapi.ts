@@ -26,8 +26,8 @@ export function buildOpenApiSpec(baseUrl: string) {
           required: ["tipoServicio", "canalOficina", "descripcion"],
           properties: {
             solicitante: { type: "string", example: "Integracion ERP" },
-            tipoServicio: { type: "string", example: "Soporte TI" },
-            canalOficina: { type: "string", example: "Oficina Central" },
+            tipoServicio: { type: "number", example: 1 },
+            canalOficina: { type: "number", example: 1 },
             descripcion: { type: "string", example: "No puedo acceder al sistema." },
           },
         },
@@ -99,9 +99,8 @@ export function buildOpenApiSpec(baseUrl: string) {
       "/api/external/tickets": {
         post: {
           summary: "Crear ticket externo",
-          description:
-            "Endpoint de integracion externa para alta completa de tickets con x-api-key o sesion web.",
-          security: [{ apiKeyAuth: [] }, { cookieAuth: [] }],
+          description: "Endpoint de integracion externa para alta completa de tickets solo con x-api-key.",
+          security: [{ apiKeyAuth: [] }],
           requestBody: {
             required: true,
             content: {

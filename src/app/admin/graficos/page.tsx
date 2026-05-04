@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import chroma from "chroma-js";
 
@@ -23,8 +24,10 @@ export default function GraficosPage() {
   const [canales, setCanales] = useState<Serie[]>([]);
   const [tiempos, setTiempos] = useState<Serie[]>([]);
   const [tab, setTab] = useState<"tipos" | "motivos" | "canales" | "tiempo">("tipos");
+  const [chartVersion, setChartVersion] = useState(0);
 
   const loadedRef = useRef(false);
+  const reduceMotion = useReducedMotion();
 
   async function load() {
     setLoading(true);
@@ -53,6 +56,7 @@ export default function GraficosPage() {
       setMotivos((motData.items as RawMotivo[]).map((i) => ({ label: i.motivo_servicio, total: i.total })));
       setCanales((canData.items as RawCanal[]).map((i) => ({ label: i.canal_oficina, total: i.total })));
       setTiempos((timeData.items as RawTiempo[]).map((i) => ({ label: i.rango, total: i.total })));
+      setChartVersion((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar reportes");
     } finally {
@@ -63,16 +67,14 @@ export default function GraficosPage() {
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    void load();
+    async function loadInitialCharts() {
+      await load();
+    }
+    void loadInitialCharts();
   }, []);
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Gráficos</h1>
-        <p className="page-subtitle">Reportes por tipo, motivo, canal y tiempo de respuesta.</p>
-      </header>
-
       <section className="card">
         <div className="filters">
           <label className="field">
@@ -80,7 +82,7 @@ export default function GraficosPage() {
             <input className="input" type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
           </label>
         </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <div className="actions-row">
           <button className="button" onClick={load} disabled={loading}>
             {loading ? "Cargando..." : "Actualizar"}
           </button>
@@ -107,10 +109,52 @@ export default function GraficosPage() {
         </div>
       </section>
 
-      {tab === "tipos" && <ChartBlock title="Tipos de servicio" items={tipos} />}
-      {tab === "motivos" && <ChartBlock title="Motivos de servicio" items={motivos} />}
-      {tab === "canales" && <ChartBlock title="Canales de atención" items={canales} />}
-      {tab === "tiempo" && <ChartBlock title="Tiempo de respuesta" items={tiempos} />}
+      <AnimatePresence mode="wait" initial={false}>
+        {tab === "tipos" && (
+          <motion.div
+            key={`tipos-${chartVersion}`}
+            initial={reduceMotion ? false : { opacity: 0, y: 16, filter: "blur(4px)" }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10, filter: "blur(3px)" }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            <ChartBlock title="Tipos de servicio" items={tipos} />
+          </motion.div>
+        )}
+        {tab === "motivos" && (
+          <motion.div
+            key={`motivos-${chartVersion}`}
+            initial={reduceMotion ? false : { opacity: 0, y: 16, filter: "blur(4px)" }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10, filter: "blur(3px)" }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            <ChartBlock title="Motivos de servicio" items={motivos} />
+          </motion.div>
+        )}
+        {tab === "canales" && (
+          <motion.div
+            key={`canales-${chartVersion}`}
+            initial={reduceMotion ? false : { opacity: 0, y: 16, filter: "blur(4px)" }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10, filter: "blur(3px)" }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            <ChartBlock title="Canales de atención" items={canales} />
+          </motion.div>
+        )}
+        {tab === "tiempo" && (
+          <motion.div
+            key={`tiempo-${chartVersion}`}
+            initial={reduceMotion ? false : { opacity: 0, y: 16, filter: "blur(4px)" }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10, filter: "blur(3px)" }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            <ChartBlock title="Tiempo de respuesta" items={tiempos} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
@@ -120,6 +164,7 @@ function ChartBlock({ title, items }: { title: string; items: Serie[] }) {
   const pieRef = useRef<HTMLDivElement | null>(null);
   const [isExportingBar, setIsExportingBar] = useState(false);
   const [isExportingPie, setIsExportingPie] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const max = items.reduce((acc, item) => Math.max(acc, item.total), 0);
   const colors = useMemo(() => {
@@ -152,7 +197,7 @@ function ChartBlock({ title, items }: { title: string; items: Serie[] }) {
   return (
     <section className="card">
       <div className="page-header">
-        <h2 className="page-title" style={{ fontSize: "1.5rem" }}>{title}</h2>
+        <h2 className="section-title">{title}</h2>
       </div>
       {items.length === 0 ? (
         <p className="muted">Sin datos para mostrar.</p>
@@ -164,12 +209,14 @@ function ChartBlock({ title, items }: { title: string; items: Serie[] }) {
                 <div key={item.label} className="bar-row">
                   <div>{item.label}</div>
                   <div className="bar-track">
-                    <div
+                    <motion.div
                       className="bar"
-                      style={{
+                      initial={reduceMotion ? false : { width: 0 }}
+                      animate={{
                         width: `${max ? Math.round((item.total / max) * 100) : 0}%`,
                         background: colors[index] || "#1f3a8a",
                       }}
+                      transition={{ duration: 0.45, delay: reduceMotion ? 0 : index * 0.04, ease: "easeOut" }}
                     />
                   </div>
                   <div className="bar-value">{item.total}</div>
@@ -200,13 +247,14 @@ function PieChart({ items, colors }: { items: Serie[]; colors: string[] }) {
   const radius = 90;
   const cx = 110;
   const cy = 110;
-  let cumulative = 0;
-
   const slices = items.map((item, index) => {
     const value = total ? item.total / total : 0;
-    const startAngle = cumulative * 2 * Math.PI;
-    const endAngle = (cumulative + value) * 2 * Math.PI;
-    cumulative += value;
+    const startRatio = total
+      ? items.slice(0, index).reduce((acc, current) => acc + current.total, 0) / total
+      : 0;
+    const endRatio = startRatio + value;
+    const startAngle = startRatio * 2 * Math.PI;
+    const endAngle = endRatio * 2 * Math.PI;
 
     const x1 = cx + radius * Math.cos(startAngle);
     const y1 = cy + radius * Math.sin(startAngle);

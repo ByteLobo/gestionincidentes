@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { LayoutGrid } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 type User = { id: number; username: string; role: string; roles?: string[] } | null;
 
@@ -42,11 +42,6 @@ export default function PanelPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Panel principal</h1>
-        <p className="page-subtitle">Accesos disponibles según tu rol.</p>
-      </header>
-
       <motion.section
         className="card"
         initial={{ opacity: 0, y: 8 }}
@@ -59,7 +54,7 @@ export default function PanelPage() {
           <div className="nav-links">
             {allowedTabs.map((tab) => (
               <a key={tab.href} className="nav-link" href={tab.href}>
-                <LayoutGrid style={{ width: 16, height: 16, marginRight: 6 }} />
+                <ArrowRight style={{ width: 16, height: 16 }} />
                 {tab.label}
               </a>
             ))}

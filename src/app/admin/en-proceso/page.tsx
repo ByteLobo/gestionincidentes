@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Ticket = {
@@ -34,11 +35,12 @@ export default function EnProcesoPage() {
   const [channels, setChannels] = useState<CatalogItem[]>([]);
   const [gerencias, setGerencias] = useState<CatalogItem[]>([]);
   const loadedRef = useRef(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    async function loadCatalogs() {
+    async function loadInitialCatalogs() {
       const [tipoRes, canalRes, gerRes] = await Promise.all([
         fetch("/api/catalogos/tiposervicio"),
         fetch("/api/catalogos/canaloficina"),
@@ -53,7 +55,7 @@ export default function EnProcesoPage() {
       setChannels(canalData.items || []);
       setGerencias(gerData.items || []);
     }
-    void loadCatalogs();
+    void loadInitialCatalogs();
   }, []);
 
   const queryString = useMemo(() => {
@@ -96,16 +98,16 @@ export default function EnProcesoPage() {
   }
 
   useEffect(() => {
-    void fetchTickets();
+    async function run() {
+      await fetchTickets();
+    }
+    void run();
   }, []);
+
+  const resultsKey = `${queryString}:${items.length}:${loading ? "loading" : "ready"}`;
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Tickets por Resolver</h1>
-        <p className="page-subtitle">Esta cola solo muestra tickets sin asignar. Desde aquí solo se toman.</p>
-      </header>
-
       <section className="card">
         <div className="filters">
           <label className="field">
@@ -158,7 +160,7 @@ export default function EnProcesoPage() {
             <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Solicitante o descripción" />
           </label>
         </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <div className="actions-row">
           <button className="button" onClick={fetchTickets} disabled={loading}>
             {loading ? "Cargando..." : "Buscar"}
           </button>
@@ -180,50 +182,59 @@ export default function EnProcesoPage() {
 
       <section className="card">
         {error && <p className="error">{error}</p>}
-        {items.length === 0 ? (
-          <p className="muted">No hay tickets sin asignar con esos filtros.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Tipo</th>
-                  <th>Solicitante</th>
-                  <th>Tipo servicio</th>
-                  <th>Canal</th>
-                  <th>Gerencia</th>
-                  <th>Motivo</th>
-                  <th>Descripción</th>
-                  <th>Estado</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.id}</td>
-                    <td>{item.tipo_registro}</td>
-                    <td>{item.solicitante}</td>
-                    <td>{item.tipo_servicio}</td>
-                    <td>{item.canal_oficina}</td>
-                    <td>{item.gerencia}</td>
-                    <td>{item.motivo_servicio}</td>
-                    <td style={{ maxWidth: 320 }}>{item.descripcion}</td>
-                    <td>{item.estado}</td>
-                    <td>
-                      <button className="button" onClick={() => void takeTicket(item.id)}>
-                        Tomar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={resultsKey}
+            initial={reduceMotion ? false : { opacity: 0, y: 14, scale: 0.995 }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {items.length === 0 ? (
+              <p className="muted">No hay tickets sin asignar con esos filtros.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Tipo</th>
+                      <th>Solicitante</th>
+                      <th>Tipo servicio</th>
+                      <th>Canal</th>
+                      <th>Gerencia</th>
+                      <th>Motivo</th>
+                      <th>Descripción</th>
+                      <th>Estado</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.id}</td>
+                        <td>{item.tipo_registro}</td>
+                        <td>{item.solicitante}</td>
+                        <td>{item.tipo_servicio}</td>
+                        <td>{item.canal_oficina}</td>
+                        <td>{item.gerencia}</td>
+                        <td>{item.motivo_servicio}</td>
+                        <td style={{ maxWidth: 320 }}>{item.descripcion}</td>
+                        <td>{item.estado}</td>
+                        <td>
+                          <button className="button" onClick={() => void takeTicket(item.id)}>
+                            Tomar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </section>
     </main>
   );
 }
-

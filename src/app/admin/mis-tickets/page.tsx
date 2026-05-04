@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Ticket = {
@@ -68,6 +69,7 @@ export default function MisTicketsPage() {
   const [reassignStep, setReassignStep] = useState<ReassignStep>("select");
   const [reassignTarget, setReassignTarget] = useState("");
   const loadedRef = useRef(false);
+  const reduceMotion = useReducedMotion();
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -97,6 +99,8 @@ export default function MisTicketsPage() {
     if (!serviceType) return [];
     return motivos.filter((item) => item.service_type_id === serviceType.id);
   }, [motivos, selected, serviceTypes]);
+
+  const resultsKey = `${activeTab}:${items.length}:${loading ? "loading" : "ready"}`;
 
   async function fetchTickets() {
     setLoading(true);
@@ -156,9 +160,10 @@ export default function MisTicketsPage() {
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    void fetchTickets();
-    void loadSupportUsers();
-    void loadCatalogs();
+    async function loadInitialState() {
+      await Promise.all([fetchTickets(), loadSupportUsers(), loadCatalogs()]);
+    }
+    void loadInitialState();
   }, []);
 
   function openEdit(ticket: Ticket) {
@@ -256,13 +261,8 @@ export default function MisTicketsPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Mis Tickets</h1>
-        <p className="page-subtitle">Aquí se gestionan estados, acciones históricas, reasignación y cierre.</p>
-      </header>
-
       <section className="card">
-        <div style={{ display: "flex", gap: 12 }}>
+        <div className="actions-row">
           <button className="button" onClick={fetchTickets} disabled={loading}>
             {loading ? "Cargando..." : "Actualizar"}
           </button>
@@ -270,7 +270,12 @@ export default function MisTicketsPage() {
       </section>
 
       <section className="card">
-        <div className="tabs">
+        <motion.div
+          className="tabs"
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
           <button className={`tab ${activeTab === "TODOS" ? "active" : ""}`} onClick={() => setActiveTab("TODOS")}>
             Todos ({counts.TODOS})
           </button>
@@ -292,55 +297,65 @@ export default function MisTicketsPage() {
           >
             Resueltos ({counts.RESUELTO})
           </button>
-        </div>
+        </motion.div>
       </section>
 
       <section className="card">
         {error && <p className="error">{error}</p>}
-        {visibleItems.length === 0 ? (
-          <p className="muted">Sin tickets asignados.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Tipo</th>
-                  <th>Solicitante</th>
-                  <th>Tipo servicio</th>
-                  <th>Canal</th>
-                  <th>Gerencia</th>
-                  <th>Estado</th>
-                  <th>Reasignar</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleItems.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.id}</td>
-                    <td>{item.tipo_registro || "SOPORTE"}</td>
-                    <td>{item.solicitante}</td>
-                    <td>{item.tipo_servicio}</td>
-                    <td>{item.canal_oficina}</td>
-                    <td>{item.gerencia}</td>
-                    <td>{item.estado}</td>
-                    <td>
-                      <button className="nav-link" onClick={() => openReassign(item)}>
-                        Reasignar
-                      </button>
-                    </td>
-                    <td>
-                      <button className="nav-link" onClick={() => openEdit(item)}>
-                        Gestionar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={resultsKey}
+            initial={reduceMotion ? false : { opacity: 0, y: 14, scale: 0.995 }}
+            animate={reduceMotion ? {} : { opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? {} : { opacity: 0, y: -10 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {visibleItems.length === 0 ? (
+              <p className="muted">Sin tickets asignados.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Tipo</th>
+                      <th>Solicitante</th>
+                      <th>Tipo servicio</th>
+                      <th>Canal</th>
+                      <th>Gerencia</th>
+                      <th>Estado</th>
+                      <th>Reasignar</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleItems.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.id}</td>
+                        <td>{item.tipo_registro || "SOPORTE"}</td>
+                        <td>{item.solicitante}</td>
+                        <td>{item.tipo_servicio}</td>
+                        <td>{item.canal_oficina}</td>
+                        <td>{item.gerencia}</td>
+                        <td>{item.estado}</td>
+                        <td>
+                          <button className="nav-link" onClick={() => openReassign(item)}>
+                            Reasignar
+                          </button>
+                        </td>
+                        <td>
+                          <button className="nav-link" onClick={() => openEdit(item)}>
+                            Gestionar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </section>
 
       {selected && edit && (

@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS incidents (
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS incidents_created_at_idx ON incidents (created_at DESC);
+CREATE INDEX IF NOT EXISTS incidents_estado_created_at_idx ON incidents (estado, created_at DESC);
+CREATE INDEX IF NOT EXISTS incidents_tipo_servicio_idx ON incidents (tipo_servicio);
+CREATE INDEX IF NOT EXISTS incidents_canal_oficina_idx ON incidents (canal_oficina);
+CREATE INDEX IF NOT EXISTS incidents_gerencia_idx ON incidents (gerencia);
+CREATE INDEX IF NOT EXISTS incidents_tipo_registro_idx ON incidents (tipo_registro);
+CREATE INDEX IF NOT EXISTS incidents_mes_atencion_idx ON incidents (mes_atencion);
+CREATE INDEX IF NOT EXISTS incidents_encargado_estado_created_at_idx ON incidents (encargado, estado, created_at DESC);
+CREATE INDEX IF NOT EXISTS incidents_fecha_reporte_idx ON incidents (fecha_reporte);
+CREATE INDEX IF NOT EXISTS incidents_tiempo_minutos_idx ON incidents (tiempo_minutos);
+
 CREATE TABLE IF NOT EXISTS status_logs (
   id SERIAL PRIMARY KEY,
   incident_id INTEGER NOT NULL REFERENCES incidents(id),

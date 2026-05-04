@@ -70,16 +70,11 @@ export default function DocsPage() {
 
   return (
     <main className="page">
-      <header className="page-header">
-        <h1 className="page-title">Documentacion API</h1>
-        <p className="page-subtitle">Referencia para integraciones POST hacia el sistema.</p>
-      </header>
-
       <section className="card">
         {loading && <p className="muted">Cargando especificacion...</p>}
         {error && <p className="error">{error}</p>}
         {!loading && !error && spec && (
-          <div className="form">
+          <div className="stack">
             <p className="muted">
               <strong>{spec.info?.title || "API"}</strong> v{spec.info?.version || "-"}
             </p>
@@ -93,14 +88,20 @@ export default function DocsPage() {
         )}
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
-        <h2 className="page-title" style={{ fontSize: "1.2rem" }}>Ejemplo: Solicitud Soporte</h2>
-        <pre className="input" style={{ whiteSpace: "pre-wrap" }}>{soporteCurl}</pre>
+      <section className="card">
+        <div className="page-header">
+          <span className="page-kicker">Ejemplo</span>
+          <h2 className="section-title">Solicitud de soporte</h2>
+        </div>
+        <pre className="code-block">{soporteCurl}</pre>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
-        <h2 className="page-title" style={{ fontSize: "1.2rem" }}>Ejemplo: Ticket Externo</h2>
-        <pre className="input" style={{ whiteSpace: "pre-wrap" }}>{externalCurl}</pre>
+      <section className="card">
+        <div className="page-header">
+          <span className="page-kicker">Ejemplo</span>
+          <h2 className="section-title">Ticket externo</h2>
+        </div>
+        <pre className="code-block">{externalCurl}</pre>
       </section>
     </main>
   );

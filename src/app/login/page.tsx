@@ -58,12 +58,34 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="page">
-      <section className="card" style={{ maxWidth: 480, margin: "0 auto", width: "100%" }}>
+    <div className="page auth-shell">
+      <section className="hero-panel auth-panel">
+        <div className="hero-panel__content">
+          <div
+            style={{
+              minHeight: 320,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: 24,
+              background: "rgba(255, 255, 255, 0.34)",
+              padding: 24,
+            }}
+          >
+            <img
+              src="/images/logos/logo-msi.png"
+              alt="MSI"
+              style={{ width: "100%", maxWidth: 380, height: "auto", objectFit: "contain" }}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="card auth-card">
         <form onSubmit={handleSubmit(onSubmit)} className="form">
           <div className="page-header">
+            <span className="page-kicker">Sesión</span>
             <h1 className="page-title">Iniciar sesión</h1>
-            <p className="page-subtitle">Acceso con usuario y contraseña.</p>
+            <p className="page-subtitle">Ingresa con tu usuario operativo y contraseña.</p>
           </div>
           <label className="field">
             <span className="label">Usuario</span>
@@ -91,14 +113,18 @@ function LoginPageContent() {
 
       {openReset && (
         <div className="modal-backdrop">
-          <div className="modal">
-            <h2 className="page-title" style={{ fontSize: "1.4rem" }}>Restablecer contraseña</h2>
+          <div className="modal modal--nested">
+            <div className="page-header">
+              <span className="page-kicker">Recuperación</span>
+              <h2 className="section-title">Restablecer contraseña</h2>
+              <p className="page-subtitle">Solicita un enlace seguro para recuperar tu acceso.</p>
+            </div>
             <form
               className="form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 setResetMessage(null);
-                const res = await fetch("/api/auth/reset", {
+                const res = await fetch("/api/auth/forgot", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ identifier: resetIdentifier }),
@@ -108,7 +134,9 @@ function LoginPageContent() {
                   setResetMessage(data?.error || "No se pudo restablecer");
                   return;
                 }
-                setResetMessage(data?.message || "Contraseña enviada al correo.");
+                setResetMessage(
+                  data?.message || "Si la cuenta existe, se enviaron instrucciones para restablecer la contraseña."
+                );
                 setResetIdentifier("");
               }}
             >
@@ -116,9 +144,9 @@ function LoginPageContent() {
                 <span className="label">Usuario o correo</span>
                 <input className="input" value={resetIdentifier} onChange={(e) => setResetIdentifier(e.target.value)} required />
               </label>
-              {resetMessage && <p className="muted">{resetMessage}</p>}
-              <div style={{ display: "flex", gap: 12 }}>
-                <button className="button" type="submit">Enviar contraseña</button>
+              {resetMessage && <p className={resetMessage.includes("No se pudo") ? "error" : "success"}>{resetMessage}</p>}
+              <div className="actions-row">
+                <button className="button" type="submit">Enviar enlace</button>
                 <button className="nav-link" type="button" onClick={() => setOpenReset(false)}>Cerrar</button>
               </div>
             </form>

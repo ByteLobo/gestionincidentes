@@ -44,7 +44,10 @@ export function CatalogAdmin({ catalogo, titulo, descripcion }: Props) {
   useEffect(() => {
     if (loadedRef.current && !showInactive) return;
     loadedRef.current = true;
-    void load();
+    async function run() {
+      await load();
+    }
+    void run();
   }, [endpoint, showInactive]);
 
   async function handleAdd() {
@@ -91,11 +94,10 @@ export function CatalogAdmin({ catalogo, titulo, descripcion }: Props) {
   }
 
   return (
-    <section className="card" style={{ display: "grid", gap: 16 }}>
+    <section className="card stack">
       <div className="page-header">
-        <h2 className="page-title" style={{ fontSize: "1.5rem" }}>
-          {titulo}
-        </h2>
+        <span className="page-kicker">Catálogo</span>
+        <h2 className="section-title">{titulo}</h2>
         {descripcion && <p className="page-subtitle">{descripcion}</p>}
       </div>
 
@@ -137,29 +139,19 @@ export function CatalogAdmin({ catalogo, titulo, descripcion }: Props) {
             <p className="muted">Sin registros.</p>
           ) : (
             items.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto auto",
-                  gap: 12,
-                  alignItems: "center",
-                  padding: 12,
-                  border: "1px solid var(--border)",
-                  borderRadius: 10,
-                  background: "var(--surface-2)",
-                }}
-              >
+              <div key={item.id} className="list-card">
                 <div>
                   <strong>{item.name}</strong>
                   {!item.active && <span className="muted" style={{ marginLeft: 8 }}>(inactivo)</span>}
                 </div>
-                <button type="button" className="nav-link" onClick={() => renameItem(item)}>
-                  Renombrar
-                </button>
-                <button type="button" className="nav-link" onClick={() => toggleActive(item)}>
-                  {item.active ? "Desactivar" : "Activar"}
-                </button>
+                <div className="actions-row">
+                  <button type="button" className="nav-link" onClick={() => renameItem(item)}>
+                    Renombrar
+                  </button>
+                  <button type="button" className="nav-link" onClick={() => toggleActive(item)}>
+                    {item.active ? "Desactivar" : "Activar"}
+                  </button>
+                </div>
               </div>
             ))
           )}

@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { cookies } from "next/headers";
-import { authCookieName, verifyJwt } from "@/lib/auth";
 import { getDuplicateMessage, isUniqueViolation } from "@/lib/pg-errors";
 
 async function isAuthorized(req: Request): Promise<boolean> {
   const apiKey = req.headers.get("x-api-key") || "";
   const expected = process.env.EXTERNAL_API_KEY || "";
-  if (expected && apiKey === expected) return true;
-
-  const jar = await cookies();
-  const token = jar.get(authCookieName)?.value;
-  if (!token) return false;
-  const payload = verifyJwt(token);
-  return Boolean(payload);
+  return Boolean(expected) && apiKey === expected;
 }
 
 function toDateTime(date: string, time: string): Date | null {
@@ -48,7 +40,7 @@ function isMissing(value: unknown): boolean {
   return false;
 }
 
-function validatePayload(body: any) {
+function validatePayload(body: Record<string, unknown> | null) {
   const required = [
     "external_id",
     "tipo_registro",
