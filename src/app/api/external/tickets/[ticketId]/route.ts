@@ -19,6 +19,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ ticketId
     return NextResponse.json({ error: "ticketId requerido" }, { status: 400 });
   }
 
+  const numericTicketId = /^\d+$/.test(normalizedTicketId) ? Number(normalizedTicketId) : null;
+
   const result = await db.query(
     `SELECT id, external_id, tipo_registro, solicitante, tipo_servicio, canal_oficina, gerencia,
             motivo_servicio, descripcion, encargado, fecha_reporte, hora_reporte,
@@ -26,9 +28,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ ticketId
             tiempo_minutos, mes_atencion, categoria, porcentaje, regla_porcentaje,
             estado, clasificacion, created_at, last_updated_at
      FROM incidents
-     WHERE external_id = $1
+     WHERE external_id = $1 OR ($2::int IS NOT NULL AND id = $2)
      LIMIT 1`,
-    [normalizedTicketId]
+    [normalizedTicketId, numericTicketId]
   );
 
   if (result.rowCount === 0) {

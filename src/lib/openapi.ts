@@ -76,7 +76,7 @@ export function buildOpenApiSpec(baseUrl: string) {
             ticket: {
               type: "object",
               properties: {
-                ticketId: { type: "string", example: "SAMSI-431" },
+                ticketId: { type: "string", example: "431" },
                 internalId: { type: "number", example: 431 },
                 status: { type: "string", example: "EN_ATENCION" },
                 statusCode: { type: "string", example: "IN_PROGRESS" },
@@ -170,7 +170,7 @@ export function buildOpenApiSpec(baseUrl: string) {
       "/api/external/tickets/{ticketId}": {
         get: {
           summary: "Consultar ticket externo por Ticket ID",
-          description: "Devuelve el estado actual y detalle del ticket usando el identificador publico SAMSI-###.",
+          description: "Devuelve el estado actual y detalle del ticket usando el identificador publico numerico del ticket.",
           security: [{ apiKeyAuth: [] }],
           parameters: [
             {
@@ -178,7 +178,7 @@ export function buildOpenApiSpec(baseUrl: string) {
               name: "ticketId",
               required: true,
               schema: { type: "string" },
-              example: "SAMSI-431",
+              example: "431",
             },
           ],
           responses: {

@@ -155,7 +155,7 @@ export default function SeguimientoPage() {
               className="input"
               value={externalId}
               onChange={(e) => setExternalId(e.target.value)}
-              placeholder="Ej. SAMSI-426"
+              placeholder="Ej. 426"
             />
           </label>
           <label className="field">

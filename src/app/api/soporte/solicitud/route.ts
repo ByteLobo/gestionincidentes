@@ -181,7 +181,7 @@ export async function POST(req: Request) {
     );
 
     createdId = insertResult.rows[0]?.id ?? null;
-    ticketId = createdId ? `SAMSI-${String(createdId).padStart(3, "0")}` : null;
+    ticketId = createdId ? String(createdId) : null;
 
     if (!createdId || !ticketId) {
       throw new Error("No se pudo generar el ticketId");
