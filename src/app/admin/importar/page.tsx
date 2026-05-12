@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 
 type ImportResponse = {
   ok: boolean;
@@ -8,6 +9,7 @@ type ImportResponse = {
   inserted: number;
   failed: number;
   errors: Array<{ row: number; error: string }>;
+  message?: string;
 };
 
 export default function ImportarPage() {
@@ -69,7 +71,9 @@ export default function ImportarPage() {
     setResult(null);
 
     if (!file) {
-      setError("Selecciona un archivo CSV (.csv)");
+      const message = "Selecciona un archivo CSV o Excel";
+      setError(message);
+      toast.error(message);
       return;
     }
 
@@ -85,11 +89,22 @@ export default function ImportarPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data?.error || "No se pudo importar el archivo");
+      const message = data?.message || data?.error || "No se pudo importar el archivo";
+      setError(message);
+      setResult(data as ImportResponse | null);
+      toast.error(message);
       return;
     }
 
-    setResult(data as ImportResponse);
+    const response = data as ImportResponse;
+    setResult(response);
+
+    if (response.failed > 0) {
+      toast.warning(response.message || "La importación terminó con observaciones");
+      return;
+    }
+
+    toast.success(response.message || "Importación completada correctamente");
   }
 
   return (
@@ -102,11 +117,11 @@ export default function ImportarPage() {
             </button>
           </div>
           <label className="field">
-            <span className="label">Archivo CSV</span>
+            <span className="label">Archivo CSV o Excel</span>
             <input
               className="input"
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xls,application/vnd.ms-excel"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
@@ -124,7 +139,10 @@ export default function ImportarPage() {
           accion_tomada, primer_contacto, estado.
         </p>
         <p className="muted">
-          Fechas: dd/mm/yyyy. Hora: HH:mm.
+          Formatos permitidos: CSV, XLSX y XLS. Fechas: dd/mm/yyyy. Hora: HH:mm.
+        </p>
+        <p className="muted">
+          tipo_servicio, canal_oficina, gerencia y motivo_servicio deben existir en los catálogos activos.
         </p>
       </section>
 
@@ -137,6 +155,7 @@ export default function ImportarPage() {
       {result && (
         <section className="card">
           <h2 className="section-title">Resultado</h2>
+          {result.message && <p className="muted">{result.message}</p>}
           <p className="muted">
             Total: {result.total} | Insertados: {result.inserted} | Fallidos: {result.failed}
           </p>

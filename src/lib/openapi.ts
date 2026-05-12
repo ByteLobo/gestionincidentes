@@ -69,6 +69,43 @@ export function buildOpenApiSpec(baseUrl: string) {
             estado: { type: "string", example: "REGISTRADO" },
           },
         },
+        ExternalTicketStatusResponse: {
+          type: "object",
+          properties: {
+            ok: { type: "boolean", example: true },
+            ticket: {
+              type: "object",
+              properties: {
+                ticketId: { type: "string", example: "SAMSI-431" },
+                internalId: { type: "number", example: 431 },
+                status: { type: "string", example: "EN_ATENCION" },
+                statusCode: { type: "string", example: "IN_PROGRESS" },
+                tipoRegistro: { type: "string", example: "SOPORTE" },
+                solicitante: { type: "string", example: "Integracion ERP" },
+                tipoServicio: { type: "string", example: "Soporte Tecnico" },
+                canalOficina: { type: "string", example: "Centro La paz San Pedro" },
+                gerencia: { type: "string", example: "PENDIENTE_DEFINIR" },
+                motivoServicio: { type: "string", example: "SIN_MOTIVO" },
+                descripcion: { type: "string", example: "No puedo acceder al sistema." },
+                encargado: { type: "string", example: "SIN_ASIGNAR" },
+                fechaReporte: { type: "string", format: "date", example: "2026-05-12" },
+                horaReporte: { type: "string", example: "15:30:00" },
+                fechaRespuesta: { type: "string", format: "date", example: "2026-05-12" },
+                horaRespuesta: { type: "string", example: "15:30:00" },
+                accionTomada: { type: "string", example: "PENDIENTE" },
+                primerContacto: { type: "boolean", example: false },
+                tiempoMinutos: { type: "number", example: 0 },
+                mesAtencion: { type: "string", example: "2026-05" },
+                categoria: { type: "string", example: "Menos de 1 hora" },
+                porcentaje: { type: "number", example: 100 },
+                reglaPorcentaje: { type: "string", example: "< 1 hora = 100%" },
+                clasificacion: { type: "string", nullable: true, example: null },
+                createdAt: { type: "string", example: "2026-05-12T20:15:00.000Z" },
+                lastUpdatedAt: { type: "string", example: "2026-05-12T20:15:00.000Z" },
+              },
+            },
+          },
+        },
       },
     },
     paths: {
@@ -127,6 +164,34 @@ export function buildOpenApiSpec(baseUrl: string) {
             "400": { description: "Datos invalidos" },
             "401": { description: "No autorizado" },
             "409": { description: "Duplicado" },
+          },
+        },
+      },
+      "/api/external/tickets/{ticketId}": {
+        get: {
+          summary: "Consultar ticket externo por Ticket ID",
+          description: "Devuelve el estado actual y detalle del ticket usando el identificador publico SAMSI-###.",
+          security: [{ apiKeyAuth: [] }],
+          parameters: [
+            {
+              in: "path",
+              name: "ticketId",
+              required: true,
+              schema: { type: "string" },
+              example: "SAMSI-431",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Ticket encontrado",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ExternalTicketStatusResponse" },
+                },
+              },
+            },
+            "401": { description: "No autorizado" },
+            "404": { description: "ticketId no encontrado" },
           },
         },
       },

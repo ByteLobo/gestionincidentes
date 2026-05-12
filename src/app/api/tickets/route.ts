@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getActorName, hasAnyRole, requireRoles } from "@/lib/security";
+import { getActorName, hasAnyRole, requireAuthContext, requireRoles } from "@/lib/security";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 500;
 const MAX_PAGE_SIZE = 500;
 
 export async function GET(req: Request) {
-  const auth = await requireRoles(["SOPORTE", "SUPERVISOR", "ADMIN"]);
+  const { searchParams } = new URL(req.url);
+  const mine = searchParams.get("mine") === "true";
+  const auth = mine ? await requireAuthContext() : await requireRoles(["SOPORTE", "SUPERVISOR", "ADMIN"]);
   if (!auth) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const tipoServicio = searchParams.get("tipoServicio");
   const canal = searchParams.get("canal");
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
   const search = searchParams.get("q");
   const cola = searchParams.get("cola");
   const id = searchParams.get("id");
+  const externalId = searchParams.get("externalId");
   const solicitante = searchParams.get("solicitante");
   const encargado = searchParams.get("encargado");
   const motivo = searchParams.get("motivo");
@@ -60,6 +62,7 @@ export async function GET(req: Request) {
     const parsedId = Number(id);
     if (Number.isInteger(parsedId) && parsedId > 0) add("id =", parsedId);
   }
+  if (externalId) addLike("COALESCE(external_id, '')", externalId);
   if (solicitante) addLike("solicitante", solicitante);
   if (encargado) addLike("encargado", encargado);
   if (motivo) addLike("motivo_servicio", motivo);
@@ -79,7 +82,7 @@ export async function GET(req: Request) {
   if (search) {
     values.push(`%${search}%`);
     where.push(
-      `(solicitante ILIKE $${values.length} OR descripcion ILIKE $${values.length} OR motivo_servicio ILIKE $${values.length})`
+      `(solicitante ILIKE $${values.length} OR descripcion ILIKE $${values.length} OR motivo_servicio ILIKE $${values.length} OR COALESCE(external_id, '') ILIKE $${values.length})`
     );
   }
   if (cola === "sin_asignar") {
@@ -90,10 +93,14 @@ export async function GET(req: Request) {
     where.push(`encargado <> $${values.length}`);
   }
 
-  const restrictToAssigned = hasAnyRole(auth, ["SOPORTE"]) && !hasAnyRole(auth, ["SUPERVISOR", "ADMIN"]);
+  const restrictToAssigned = !mine && hasAnyRole(auth, ["SOPORTE"]) && !hasAnyRole(auth, ["SUPERVISOR", "ADMIN"]);
   if (restrictToAssigned && cola !== "sin_asignar") {
     values.push(getActorName(auth));
     where.push(`encargado = $${values.length}`);
+  }
+  if (mine) {
+    values.push(auth.fullName || auth.username);
+    where.push(`solicitante = $${values.length}`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -109,7 +116,7 @@ export async function GET(req: Request) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   const baseSelect =
-    `SELECT id, tipo_registro, solicitante, tipo_servicio, canal_oficina, gerencia, ` +
+    `SELECT id, external_id, tipo_registro, solicitante, tipo_servicio, canal_oficina, gerencia, ` +
     `motivo_servicio, descripcion, encargado, fecha_reporte, hora_reporte, ` +
     `fecha_respuesta, hora_respuesta, accion_tomada, primer_contacto, ` +
     `tiempo_minutos, mes_atencion, categoria, porcentaje, regla_porcentaje, ` +

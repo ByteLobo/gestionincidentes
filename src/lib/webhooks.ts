@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { mapExternalStatus } from "@/lib/external-status";
 
 const WEBHOOK_URL = process.env.WEBHOOK_TARGET_URL || "";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
@@ -29,6 +30,26 @@ type TicketActionEventPayload = {
     text: string;
     created_at: string;
     created_by: string;
+  };
+};
+
+type TicketStatusChangedEventPayload = {
+  event: string;
+  occurred_at: string;
+  ticket: {
+    id: number;
+    ticket_id: string;
+    tipo_registro: string;
+    solicitante: string;
+    tipo_servicio: string;
+    canal_oficina: string;
+    gerencia: string;
+    encargado: string;
+    previous_status: string | null;
+    current_status: string;
+    status_code: string;
+    accion_tomada: string | null;
+    updated_by: string | null;
   };
 };
 
@@ -124,6 +145,45 @@ export async function publishTicketActionEvent(params: {
   };
 
   return publishWebhookEvent(payload.event, payload);
+}
+
+export async function publishTicketStatusChangedEvent(params: {
+  ticket: {
+    id: number;
+    ticketId: string;
+    tipoRegistro: string;
+    solicitante: string;
+    tipoServicio: string;
+    canalOficina: string;
+    gerencia: string;
+    encargado: string;
+    previousStatus: string | null;
+    currentStatus: string;
+    accionTomada?: string | null;
+    updatedBy?: string | null;
+  };
+}) {
+  const payload: TicketStatusChangedEventPayload = {
+    event: "ticket.status.changed",
+    occurred_at: new Date().toISOString(),
+    ticket: {
+      id: params.ticket.id,
+      ticket_id: params.ticket.ticketId,
+      tipo_registro: params.ticket.tipoRegistro,
+      solicitante: params.ticket.solicitante,
+      tipo_servicio: params.ticket.tipoServicio,
+      canal_oficina: params.ticket.canalOficina,
+      gerencia: params.ticket.gerencia,
+      encargado: params.ticket.encargado,
+      previous_status: params.ticket.previousStatus,
+      current_status: params.ticket.currentStatus,
+      status_code: mapExternalStatus(params.ticket.currentStatus),
+      accion_tomada: params.ticket.accionTomada ?? null,
+      updated_by: params.ticket.updatedBy ?? null,
+    },
+  };
+
+  return publishWebhookEvent(payload.event, payload as unknown as CatalogEventPayload);
 }
 
 export async function retryWebhookOutbox(id?: number) {

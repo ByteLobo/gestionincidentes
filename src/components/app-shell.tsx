@@ -69,6 +69,14 @@ const links: NavLink[] = [
     group: "Operación",
   },
   {
+    label: "Seguimiento",
+    href: "/seguimiento",
+    hint: "Consulta el estado de tus tickets",
+    icon: CircleUserRound,
+    roles: ["SOLICITANTE", "SOPORTE", "SUPERVISOR", "ADMIN"],
+    group: "Seguimiento",
+  },
+  {
     label: "Pendientes",
     href: "/admin/en-proceso",
     hint: "Tickets sin asignar",

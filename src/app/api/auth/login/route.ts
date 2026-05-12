@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { authCookieName, authCookieSecure, signJwt } from "@/lib/auth";
+import { authCookieName, authCookieSecure, mergeRoles, signJwt } from "@/lib/auth";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
@@ -32,10 +32,10 @@ export async function POST(req: Request) {
   }
 
   const rolesResult = await db.query("SELECT role FROM user_roles WHERE user_id = $1", [user.id]);
-  const roles =
-    rolesResult.rowCount > 0
-      ? rolesResult.rows.map((r: { role: string }) => r.role)
-      : [user.role];
+  const roles = mergeRoles(
+    [user.role],
+    rolesResult.rows.map((r: { role: string }) => r.role)
+  );
   const token = signJwt({ sub: String(user.id), roles });
   const res = NextResponse.json({ ok: true });
   res.cookies.set(authCookieName, token, {

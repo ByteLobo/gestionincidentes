@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { authCookieName, verifyJwt } from "@/lib/auth";
+import { authCookieName, mergeRoles, verifyJwt } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export async function GET() {
@@ -16,9 +16,9 @@ export async function GET() {
   );
   if (result.rowCount === 0) return NextResponse.json({ user: null });
   const rolesResult = await db.query("SELECT role FROM user_roles WHERE user_id = $1", [payload.sub]);
-  const roles =
-    rolesResult.rowCount > 0
-      ? rolesResult.rows.map((r: { role: string }) => r.role)
-      : [result.rows[0].role];
+  const roles = mergeRoles(
+    [result.rows[0].role],
+    rolesResult.rows.map((r: { role: string }) => r.role)
+  );
   return NextResponse.json({ user: { ...result.rows[0], roles } });
 }

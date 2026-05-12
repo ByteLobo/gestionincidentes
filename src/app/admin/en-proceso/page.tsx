@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Ticket = {
   id: number;
+  external_id: string | null;
   tipo_registro: string;
   solicitante: string;
   tipo_servicio: string;
@@ -198,6 +199,7 @@ export default function EnProcesoPage() {
                   <thead>
                     <tr>
                       <th>ID</th>
+                      <th>Ticket ID</th>
                       <th>Tipo</th>
                       <th>Solicitante</th>
                       <th>Tipo servicio</th>
@@ -213,6 +215,7 @@ export default function EnProcesoPage() {
                     {items.map((item) => (
                       <tr key={item.id}>
                         <td>{item.id}</td>
+                        <td>{item.external_id || "-"}</td>
                         <td>{item.tipo_registro}</td>
                         <td>{item.solicitante}</td>
                         <td>{item.tipo_servicio}</td>

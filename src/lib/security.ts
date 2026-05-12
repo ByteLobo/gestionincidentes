@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { authCookieName, verifyJwt } from "@/lib/auth";
+import { authCookieName, mergeRoles, verifyJwt } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Role } from "@/lib/rbac";
 
@@ -33,10 +33,6 @@ export type AuthContext = {
 
 export type TicketPermission = "queue" | "manage" | "actions";
 
-function uniqueRoles(roles: Role[]): Role[] {
-  return Array.from(new Set(roles));
-}
-
 export function hasAnyRole(auth: AuthContext, allowed: Role[]): boolean {
   return allowed.some((role) => auth.roles.includes(role));
 }
@@ -64,8 +60,9 @@ export async function requireAuthContext(): Promise<AuthContext | null> {
     rowCount: number;
     rows: DbRoleRow[];
   };
-  const roles = uniqueRoles(
-    rolesResult.rowCount > 0 ? rolesResult.rows.map((row: DbRoleRow) => row.role) : [user.role]
+  const roles = mergeRoles(
+    [user.role],
+    rolesResult.rows.map((row: DbRoleRow) => row.role)
   );
 
   return {

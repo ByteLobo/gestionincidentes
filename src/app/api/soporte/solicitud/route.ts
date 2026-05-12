@@ -121,56 +121,83 @@ export async function POST(req: Request) {
   const categoria = categoriaPorTiempo(diffMinutes);
   const { porcentaje, regla } = porcentajePorTiempo(diffMinutes);
 
-  await db.query(
-    `INSERT INTO incidents (
-      tipo_registro,
-      solicitante,
-      tipo_servicio,
-      canal_oficina,
-      gerencia,
-      motivo_servicio,
-      descripcion,
-      encargado,
-      fecha_reporte,
-      hora_reporte,
-      fecha_respuesta,
-      hora_respuesta,
-      accion_tomada,
-      primer_contacto,
-      tiempo_minutos,
-      mes_atencion,
-      categoria,
-      porcentaje,
-      regla_porcentaje,
-      estado,
-      created_at
-    ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21
-    )`,
-    [
-      "SOPORTE",
-      solicitante,
-      tipoServicio.name,
-      canalOficina.name,
-      GERENCIA_PENDIENTE,
-      "SIN_MOTIVO",
-      descripcion,
-      encargado,
-      fecha,
-      hora,
-      fecha,
-      hora,
-      "PENDIENTE",
-      false,
-      diffMinutes,
-      monthAttention,
-      categoria,
-      porcentaje,
-      regla,
-      "REGISTRADO",
-      createdAt,
-    ]
-  );
+  const client = await db.connect();
+  let createdId: number | null = null;
+  let ticketId: string | null = null;
 
-  return NextResponse.json({ ok: true });
+  try {
+    await client.query("BEGIN");
+
+    const insertResult = await client.query(
+      `INSERT INTO incidents (
+        tipo_registro,
+        solicitante,
+        tipo_servicio,
+        canal_oficina,
+        gerencia,
+        motivo_servicio,
+        descripcion,
+        encargado,
+        fecha_reporte,
+        hora_reporte,
+        fecha_respuesta,
+        hora_respuesta,
+        accion_tomada,
+        primer_contacto,
+        tiempo_minutos,
+        mes_atencion,
+        categoria,
+        porcentaje,
+        regla_porcentaje,
+        estado,
+        created_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21
+      )
+      RETURNING id`,
+      [
+        "SOPORTE",
+        solicitante,
+        tipoServicio.name,
+        canalOficina.name,
+        GERENCIA_PENDIENTE,
+        "SIN_MOTIVO",
+        descripcion,
+        encargado,
+        fecha,
+        hora,
+        fecha,
+        hora,
+        "PENDIENTE",
+        false,
+        diffMinutes,
+        monthAttention,
+        categoria,
+        porcentaje,
+        regla,
+        "REGISTRADO",
+        createdAt,
+      ]
+    );
+
+    createdId = insertResult.rows[0]?.id ?? null;
+    ticketId = createdId ? `SAMSI-${String(createdId).padStart(3, "0")}` : null;
+
+    if (!createdId || !ticketId) {
+      throw new Error("No se pudo generar el ticketId");
+    }
+
+    await client.query("UPDATE incidents SET external_id = $1 WHERE id = $2", [ticketId, createdId]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return NextResponse.json({
+    ok: true,
+    ticketId,
+  });
 }

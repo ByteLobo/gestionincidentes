@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { cookies } from "next/headers";
-import { authCookieName, verifyJwt } from "@/lib/auth";
+import { authCookieName, getJwtRoles, verifyJwt } from "@/lib/auth";
 
 async function getEncargadoScope() {
   const jar = await cookies();
@@ -9,7 +9,7 @@ async function getEncargadoScope() {
   if (!token) return null;
   const payload = verifyJwt(token);
   if (!payload) return null;
-  const roles = payload.roles && payload.roles.length ? payload.roles : payload.role ? [payload.role] : [];
+  const roles = getJwtRoles(payload);
   if (roles.includes("SUPERVISOR") || roles.includes("ADMIN")) return null;
   if (roles.includes("SOPORTE")) {
     const user = await db.query("SELECT full_name FROM users WHERE id = $1", [payload.sub]);

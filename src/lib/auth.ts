@@ -15,6 +15,20 @@ const COOKIE_NAME = "auth_token";
 // Enable explicitly with COOKIE_SECURE=true when HTTPS is configured.
 const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 
+export function mergeRoles(...roleSets: Array<Array<Role | null | undefined> | undefined>): Role[] {
+  return Array.from(
+    new Set(
+      roleSets
+        .flatMap((roles) => roles ?? [])
+        .filter((role): role is Role => Boolean(role))
+    )
+  );
+}
+
+export function getJwtRoles(payload: Partial<JwtPayload> | null | undefined): Role[] {
+  return mergeRoles(payload?.roles, payload?.role ? [payload.role] : []);
+}
+
 export function signJwt(payload: JwtPayload): string {
   if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not set");

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
-import { authCookieName, verifyJwt } from "@/lib/auth";
+import { authCookieName, getJwtRoles, verifyJwt } from "@/lib/auth";
 
 type RawRow = Record<string, unknown>;
 
@@ -21,6 +22,15 @@ type ParsedRow = {
   accionTomada: string;
   primerContacto: boolean;
   estado: "REGISTRADO" | "EN_ATENCION" | "RESPONDIDO" | "RESUELTO";
+};
+
+type CatalogValue = {
+  id: number;
+  name: string;
+};
+
+type MotivoCatalogValue = CatalogValue & {
+  serviceTypeId: number;
 };
 
 function splitCsvLine(line: string, delimiter: string): string[] {
@@ -76,6 +86,28 @@ function parseCsv(text: string): RawRow[] {
   return rows;
 }
 
+function rowsFromMatrix(matrix: unknown[][]): RawRow[] {
+  const normalizedMatrix = matrix
+    .filter((row) => row.some((cell) => readString(cell).length > 0))
+    .map((row) => row.map((cell) => readString(cell)));
+
+  if (normalizedMatrix.length === 0) return [];
+
+  const headers = normalizedMatrix[0].map((header) => normalizeHeader(header));
+  const rows: RawRow[] = [];
+
+  for (let i = 1; i < normalizedMatrix.length; i += 1) {
+    const cols = normalizedMatrix[i];
+    const row: RawRow = {};
+    for (let c = 0; c < headers.length; c += 1) {
+      row[headers[c]] = cols[c] ?? "";
+    }
+    rows.push(row);
+  }
+
+  return rows;
+}
+
 function normalizeHeader(value: string): string {
   return value
     .normalize("NFD")
@@ -94,6 +126,41 @@ function readString(value: unknown): string {
 function parseBool(value: string): boolean {
   const v = value.trim().toLowerCase();
   return v === "si" || v === "sí" || v === "true" || v === "1" || v === "yes";
+}
+
+async function loadCatalogMap(table: string): Promise<Map<string, CatalogValue>> {
+  const result = await db.query(`SELECT id, name FROM ${table} WHERE active = true`);
+  const map = new Map<string, CatalogValue>();
+  for (const row of result.rows as CatalogValue[]) {
+    map.set(normalizeHeader(row.name), row);
+  }
+  return map;
+}
+
+function findCatalogValue<T extends CatalogValue>(
+  value: string,
+  catalog: Map<string, T>,
+  label: string
+): { ok: true; value: T } | { ok: false; error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: false, error: `${label} es requerido` };
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const numericId = Number(trimmed);
+    for (const item of catalog.values()) {
+      if (item.id === numericId) return { ok: true, value: item };
+    }
+    return { ok: false, error: `${label} no encontrado` };
+  }
+
+  const found = catalog.get(normalizeHeader(trimmed));
+  if (!found) {
+    return { ok: false, error: `${label} no encontrado: ${trimmed}` };
+  }
+
+  return { ok: true, value: found };
 }
 
 function normalizeDateString(value: string): string | null {
@@ -162,24 +229,76 @@ function getByAlias(row: RawRow, aliases: string[]): string {
   return "";
 }
 
-function parseRow(row: RawRow): { ok: true; value: ParsedRow } | { ok: false; error: string } {
+async function parseSpreadsheet(file: File): Promise<RawRow[]> {
+  const lowerName = file.name.toLowerCase();
+
+  if (lowerName.endsWith(".csv")) {
+    return parseCsv(await file.text());
+  }
+
+  if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, {
+      type: "array",
+      cellDates: true,
+    });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) return [];
+    const sheet = workbook.Sheets[firstSheetName];
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: "",
+      raw: false,
+      dateNF: "dd/mm/yyyy",
+    });
+    return rowsFromMatrix(matrix);
+  }
+
+  throw new Error("Formato no soportado");
+}
+
+function parseRow(
+  row: RawRow,
+  catalogs: {
+    tiposServicio: Map<string, CatalogValue>;
+    canales: Map<string, CatalogValue>;
+    gerencias: Map<string, CatalogValue>;
+    motivos: Map<string, MotivoCatalogValue>;
+  }
+): { ok: true; value: ParsedRow } | { ok: false; error: string } {
   const tipoRegistroRaw = getByAlias(row, ["tipo_registro", "tiporegistro", "tipo"]);
   const tipoRegistro = tipoRegistroRaw.toUpperCase() === "SOPORTE" ? "SOPORTE" : "INCIDENTE";
 
   const solicitante = getByAlias(row, ["solicitante", "usuario_solicitante", "usuario"]);
-  const tipoServicio = getByAlias(row, ["tipo_servicio", "tiposervicio"]);
-  const canalOficina = getByAlias(row, ["canal_oficina", "canal", "oficina"]);
-  const gerencia = getByAlias(row, ["gerencia"]);
-  const motivoServicio = getByAlias(row, ["motivo_servicio", "motivo"]) || "SIN_MOTIVO";
+  const tipoServicioRaw = getByAlias(row, ["tipo_servicio", "tiposervicio"]);
+  const canalOficinaRaw = getByAlias(row, ["canal_oficina", "canal", "oficina"]);
+  const gerenciaRaw = getByAlias(row, ["gerencia"]);
+  const motivoServicioRaw = getByAlias(row, ["motivo_servicio", "motivo"]) || "SIN_MOTIVO";
   const descripcion = getByAlias(row, ["descripcion", "descripcion_problema", "detalle"]);
   const encargado = getByAlias(row, ["encargado"]) || "SIN_ASIGNAR";
   const accionTomada = getByAlias(row, ["accion_tomada", "accion"]) || "PENDIENTE";
 
-  if (!solicitante || !tipoServicio || !canalOficina || !gerencia || !descripcion) {
+  if (!solicitante || !tipoServicioRaw || !canalOficinaRaw || !gerenciaRaw || !descripcion) {
     return {
       ok: false,
       error: "Faltan campos requeridos: solicitante, tipo_servicio, canal_oficina, gerencia, descripcion",
     };
+  }
+
+  const tipoServicioResolved = findCatalogValue(tipoServicioRaw, catalogs.tiposServicio, "tipo_servicio");
+  if (!tipoServicioResolved.ok) return tipoServicioResolved;
+
+  const canalOficinaResolved = findCatalogValue(canalOficinaRaw, catalogs.canales, "canal_oficina");
+  if (!canalOficinaResolved.ok) return canalOficinaResolved;
+
+  const gerenciaResolved = findCatalogValue(gerenciaRaw, catalogs.gerencias, "gerencia");
+  if (!gerenciaResolved.ok) return gerenciaResolved;
+
+  const motivoServicioResolved = findCatalogValue(motivoServicioRaw, catalogs.motivos, "motivo_servicio");
+  if (!motivoServicioResolved.ok) return motivoServicioResolved;
+
+  if (motivoServicioResolved.value.serviceTypeId !== tipoServicioResolved.value.id) {
+    return { ok: false, error: "motivo_servicio no corresponde al tipo_servicio" };
   }
 
   const fechaReporteRaw = getByAlias(row, ["fecha_reporte", "fechareporte"]);
@@ -217,10 +336,10 @@ function parseRow(row: RawRow): { ok: true; value: ParsedRow } | { ok: false; er
     value: {
       tipoRegistro,
       solicitante,
-      tipoServicio,
-      canalOficina,
-      gerencia,
-      motivoServicio,
+      tipoServicio: tipoServicioResolved.value.name,
+      canalOficina: canalOficinaResolved.value.name,
+      gerencia: gerenciaResolved.value.name,
+      motivoServicio: motivoServicioResolved.value.name,
       descripcion,
       encargado,
       fechaReporte,
@@ -238,7 +357,7 @@ async function requireAdmin() {
   const jar = await cookies();
   const token = jar.get(authCookieName)?.value;
   const payload = token ? verifyJwt(token) : null;
-  const roles = payload?.roles && payload.roles.length ? payload.roles : payload?.role ? [payload.role] : [];
+  const roles = getJwtRoles(payload);
   if (!payload || !roles.includes("ADMIN")) return null;
   return payload;
 }
@@ -253,21 +372,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Archivo requerido (campo file)" }, { status: 400 });
   }
 
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    return NextResponse.json({ error: "Solo se permite archivo .csv" }, { status: 400 });
+  const lowerName = file.name.toLowerCase();
+  if (!lowerName.endsWith(".csv") && !lowerName.endsWith(".xlsx") && !lowerName.endsWith(".xls")) {
+    return NextResponse.json({ error: "Solo se permiten archivos .csv, .xlsx o .xls" }, { status: 400 });
   }
 
-  const csvText = await file.text();
-  const normalizedRows = parseCsv(csvText);
+  const [tiposServicio, canales, gerencias, motivosResult] = await Promise.all([
+    loadCatalogMap("catalog_service_types"),
+    loadCatalogMap("catalog_channels"),
+    loadCatalogMap("catalog_gerencias"),
+    db.query("SELECT id, name, service_type_id FROM catalog_motivos WHERE active = true"),
+  ]);
+
+  const motivos = new Map<string, MotivoCatalogValue>();
+  for (const row of motivosResult.rows as Array<CatalogValue & { service_type_id: number }>) {
+    motivos.set(normalizeHeader(row.name), {
+      id: row.id,
+      name: row.name,
+      serviceTypeId: row.service_type_id,
+    });
+  }
+
+  const normalizedRows = await parseSpreadsheet(file);
   if (normalizedRows.length === 0) {
-    return NextResponse.json({ error: "El archivo CSV no contiene filas" }, { status: 400 });
+    return NextResponse.json({ error: "El archivo no contiene filas" }, { status: 400 });
   }
 
   let inserted = 0;
   const errors: Array<{ row: number; error: string }> = [];
 
   for (let i = 0; i < normalizedRows.length; i += 1) {
-    const parsed = parseRow(normalizedRows[i]);
+    const parsed = parseRow(normalizedRows[i], {
+      tiposServicio,
+      canales,
+      gerencias,
+      motivos,
+    });
     if (!parsed.ok) {
       errors.push({ row: i + 2, error: parsed.error });
       continue;
@@ -338,11 +478,29 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({
+  const payload = {
     ok: true,
     total: normalizedRows.length,
     inserted,
     failed: errors.length,
     errors: errors.slice(0, 50),
-  });
+    message:
+      inserted === normalizedRows.length
+        ? `Importación completada: ${inserted} registros cargados`
+        : inserted > 0
+          ? `Importación parcial: ${inserted} registros cargados y ${errors.length} con error`
+          : "No se pudo importar ningún registro",
+  };
+
+  if (inserted === 0) {
+    return NextResponse.json(
+      {
+        ...payload,
+        ok: false,
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json(payload);
 }
