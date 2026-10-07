@@ -4,8 +4,13 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import {
+  resolvePreviousReportDateRange,
+  validateReportDateRange,
+} from "@/lib/report-date-range";
 import { getResolvedTicketsReport } from "@/lib/reportes";
-import { requireRoles } from "@/lib/security";
+import { getActorName, hasAnyRole, requireRoles } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -47,16 +52,47 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const fechaDesde = searchParams.get("fechaDesde");
   const fechaHasta = searchParams.get("fechaHasta");
+  const fechaDesdeAnterior = searchParams.get("fechaDesdeAnterior");
+  const fechaHastaAnterior = searchParams.get("fechaHastaAnterior");
 
   if (!fechaDesde || !fechaHasta) {
     return NextResponse.json({ error: "Debes indicar fechaDesde y fechaHasta" }, { status: 400 });
   }
 
-  if (fechaDesde > fechaHasta) {
-    return NextResponse.json({ error: "La fecha inicial no puede ser mayor a la fecha final" }, { status: 400 });
+  const currentRange = { fechaDesde, fechaHasta };
+  const currentRangeError = validateReportDateRange(currentRange);
+  if (currentRangeError) {
+    return NextResponse.json({ error: currentRangeError }, { status: 400 });
   }
 
-  const report = await getResolvedTicketsReport(auth, fechaDesde, fechaHasta);
+  const previousRangeResult = resolvePreviousReportDateRange(
+    currentRange,
+    fechaDesdeAnterior,
+    fechaHastaAnterior
+  );
+  if (previousRangeResult.error || !previousRangeResult.range) {
+    return NextResponse.json({ error: previousRangeResult.error }, { status: 400 });
+  }
+
+  const previousRange = previousRangeResult.range;
+  const historyStart = `${fechaHasta.slice(0, 4)}-01-01`;
+  const [report, previousReport, historyReport] = await Promise.all([
+    getResolvedTicketsReport(auth, fechaDesde, fechaHasta),
+    getResolvedTicketsReport(auth, previousRange.fechaDesde, previousRange.fechaHasta),
+    getResolvedTicketsReport(auth, historyStart, fechaHasta),
+  ]);
+  const supportUsers = hasAnyRole(auth, ["SUPERVISOR", "ADMIN"])
+    ? (
+        await db.query(
+          `SELECT DISTINCT COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) AS name
+           FROM users u
+           LEFT JOIN user_roles ur ON ur.user_id = u.id
+           WHERE u.active = true
+             AND (u.role = 'SOPORTE' OR ur.role = 'SOPORTE')
+           ORDER BY name ASC`
+        )
+      ).rows.map((row: { name: string }) => row.name)
+    : [getActorName(auth)];
   const tempBase = path.join(os.tmpdir(), `kpi-report-${randomUUID()}`);
   const inputPath = `${tempBase}.json`;
   const outputPath = `${tempBase}.xlsx`;
@@ -67,6 +103,15 @@ export async function GET(req: Request) {
       JSON.stringify({
         meta: report.meta,
         items: report.items,
+        comparison: {
+          meta: previousReport.meta,
+          items: previousReport.items,
+        },
+        history: {
+          meta: historyReport.meta,
+          items: historyReport.items,
+        },
+        supportUsers,
       }),
       "utf8"
     );

@@ -23,20 +23,34 @@ export async function GET(req: Request) {
   const filters = normalizeDashboardFilters(parsed.data);
   const actorScope = hasAnyRole(auth, ["SUPERVISOR", "ADMIN"]) ? null : getActorName(auth);
   const { values, whereSql } = buildDashboardWhere(filters, actorScope);
+  const assigneeFilters = { ...filters, encargado: undefined };
+  const { values: assigneeValues, whereSql: assigneeWhereSql } = buildDashboardWhere(assigneeFilters, actorScope);
+  const supportUserScopeSql = actorScope
+    ? `AND COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) = $${assigneeValues.length}`
+    : "";
   const trendGroup = buildTrendGroup(filters);
   const periodExpr =
     trendGroup === "day"
       ? "to_char(fecha_reporte::date, 'YYYY-MM-DD')"
       : "to_char(date_trunc('month', fecha_reporte::date), 'YYYY-MM')";
 
-  const [metricsResult, statusResult, tipoRegistroResult, canalResult, motivoResult, trendResult] = await Promise.all([
+  const [
+    metricsResult,
+    statusResult,
+    tipoRegistroResult,
+    canalResult,
+    motivoResult,
+    trendResult,
+    assigneeResult,
+    requesterResult,
+  ] = await Promise.all([
     db.query(
       `SELECT
          COUNT(*)::int AS total,
          COUNT(*) FILTER (WHERE estado = 'RESUELTO')::int AS resueltos,
          COUNT(*) FILTER (WHERE estado IN ('REGISTRADO', 'EN_ATENCION', 'RESPONDIDO'))::int AS abiertos,
          COUNT(*) FILTER (WHERE primer_contacto = true)::int AS primer_contacto_total,
-         COALESCE(ROUND(AVG(tiempo_minutos))::int, 0) AS promedio_minutos
+         COALESCE(ROUND(AVG(GREATEST(tiempo_minutos, 1)))::int, 0) AS promedio_minutos
        FROM incidents
        ${whereSql}`,
       values
@@ -86,6 +100,44 @@ export async function GET(req: Request) {
        ORDER BY MIN(fecha_reporte) ASC`,
       values
     ),
+    db.query(
+      `WITH support_users AS (
+         SELECT DISTINCT COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) AS name
+         FROM users u
+         LEFT JOIN user_roles ur ON ur.user_id = u.id
+         WHERE u.active = true
+           AND (u.role = 'SOPORTE' OR ur.role = 'SOPORTE')
+           ${supportUserScopeSql}
+       ),
+       filtered_incidents AS (
+         SELECT encargado, estado
+         FROM incidents
+         ${assigneeWhereSql}
+       )
+       SELECT
+         su.name,
+         COUNT(fi.encargado)::int AS total,
+         COUNT(*) FILTER (WHERE fi.estado = 'RESUELTO')::int AS resueltos,
+         COUNT(*) FILTER (WHERE fi.estado IN ('REGISTRADO', 'EN_ATENCION', 'RESPONDIDO'))::int AS abiertos
+       FROM support_users su
+       LEFT JOIN filtered_incidents fi ON fi.encargado = su.name
+       GROUP BY su.name
+       ORDER BY total DESC, su.name ASC`,
+      assigneeValues
+    ),
+    db.query(
+      `SELECT
+         solicitante AS name,
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE estado = 'RESUELTO')::int AS resueltos,
+         COUNT(*) FILTER (WHERE estado IN ('REGISTRADO', 'EN_ATENCION', 'RESPONDIDO'))::int AS abiertos
+       FROM incidents
+       ${whereSql}
+       GROUP BY solicitante
+       ORDER BY total DESC, solicitante ASC
+       LIMIT 10`,
+      values
+    ),
   ]);
 
   const metricsRow = metricsResult.rows[0] as {
@@ -116,6 +168,8 @@ export async function GET(req: Request) {
       byCanal: canalResult.rows,
       topMotivos: motivoResult.rows,
       trend: trendResult.rows,
+      byAssignee: assigneeResult.rows,
+      topRequesters: requesterResult.rows,
     },
     appliedFilters: filters,
     scope: {

@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  resolvePreviousReportDateRange,
+  validateReportDateRange,
+} from "@/lib/report-date-range";
 import { getResolvedTicketsReport } from "@/lib/reportes";
 import { requireRoles } from "@/lib/security";
 
@@ -9,15 +13,38 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const fechaDesde = searchParams.get("fechaDesde");
   const fechaHasta = searchParams.get("fechaHasta");
+  const fechaDesdeAnterior = searchParams.get("fechaDesdeAnterior");
+  const fechaHastaAnterior = searchParams.get("fechaHastaAnterior");
 
   if (!fechaDesde || !fechaHasta) {
     return NextResponse.json({ error: "Debes indicar fechaDesde y fechaHasta" }, { status: 400 });
   }
 
-  if (fechaDesde > fechaHasta) {
-    return NextResponse.json({ error: "La fecha inicial no puede ser mayor a la fecha final" }, { status: 400 });
+  const currentRange = { fechaDesde, fechaHasta };
+  const currentRangeError = validateReportDateRange(currentRange);
+  if (currentRangeError) {
+    return NextResponse.json({ error: currentRangeError }, { status: 400 });
   }
 
-  const report = await getResolvedTicketsReport(auth, fechaDesde, fechaHasta);
-  return NextResponse.json(report);
+  const previousRangeResult = resolvePreviousReportDateRange(
+    currentRange,
+    fechaDesdeAnterior,
+    fechaHastaAnterior
+  );
+  if (previousRangeResult.error || !previousRangeResult.range) {
+    return NextResponse.json({ error: previousRangeResult.error }, { status: 400 });
+  }
+
+  const previousRange = previousRangeResult.range;
+  const [report, previousReport] = await Promise.all([
+    getResolvedTicketsReport(auth, fechaDesde, fechaHasta),
+    getResolvedTicketsReport(auth, previousRange.fechaDesde, previousRange.fechaHasta),
+  ]);
+  return NextResponse.json({
+    ...report,
+    comparison: {
+      current: report,
+      previous: previousReport,
+    },
+  });
 }

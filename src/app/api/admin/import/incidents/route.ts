@@ -443,7 +443,9 @@ export async function POST(req: Request) {
       : null;
     const hasResolution = Boolean(item.fechaRespuesta && item.horaRespuesta);
     const end = hasResolution ? new Date(`${item.fechaRespuesta}T${item.horaRespuesta}`) : null;
-    const diffMinutes = start && end ? Math.floor((end.getTime() - start.getTime()) / 60000) : null;
+    const diffMinutes = start && end
+      ? Math.max(1, Math.floor((end.getTime() - start.getTime()) / 60000))
+      : null;
     const categoria = diffMinutes === null ? null : categoriaPorTiempo(diffMinutes);
     const metrics = diffMinutes === null ? null : porcentajePorTiempo(diffMinutes);
     const mesAtencion = end ? monthFromDate(end) : null;

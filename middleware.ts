@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { authCookieName } from "./src/lib/auth";
 import type { Role } from "./src/lib/auth";
 
-const PROTECTED_PREFIXES = ["/incidentes", "/soporte", "/admin"];
+const PROTECTED_PREFIXES = ["/panel", "/incidentes", "/soporte", "/admin"];
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
@@ -92,5 +92,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/incidentes/:path*", "/soporte/:path*", "/admin/:path*"],
+  matcher: ["/panel/:path*", "/incidentes/:path*", "/soporte/:path*", "/admin/:path*"],
 };

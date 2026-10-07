@@ -60,7 +60,7 @@ export async function GET(req: Request) {
          encargado,
          estado,
          fecha_reporte,
-         tiempo_minutos,
+         CASE WHEN tiempo_minutos IS NULL THEN NULL ELSE GREATEST(tiempo_minutos, 1) END AS tiempo_minutos,
          primer_contacto,
          created_at
        FROM incidents

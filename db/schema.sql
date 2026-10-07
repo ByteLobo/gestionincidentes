@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS incidents (
   hora_respuesta TIME,
   accion_tomada TEXT,
   primer_contacto BOOLEAN NOT NULL DEFAULT false,
-  tiempo_minutos INTEGER,
+  tiempo_minutos INTEGER CONSTRAINT incidents_tiempo_minutos_min_check
+    CHECK (tiempo_minutos IS NULL OR tiempo_minutos >= 1),
   mes_atencion TEXT,
   categoria TEXT,
   porcentaje NUMERIC(5,2),

@@ -307,14 +307,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       `WITH calc AS (
          SELECT
            id,
-           FLOOR(
-             EXTRACT(
-               EPOCH FROM (
-                 (fecha_respuesta::timestamp + hora_respuesta) -
-                 (fecha_toma::timestamp + hora_toma)
-               )
-             ) / 60
-           )::int AS diff_minutes
+           GREATEST(
+             1,
+             FLOOR(
+               EXTRACT(
+                 EPOCH FROM (
+                   (fecha_respuesta::timestamp + hora_respuesta) -
+                   (fecha_toma::timestamp + hora_toma)
+                 )
+               ) / 60
+             )::int
+           ) AS diff_minutes
          FROM incidents
          WHERE id = $1
            AND fecha_toma IS NOT NULL

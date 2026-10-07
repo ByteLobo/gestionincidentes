@@ -73,7 +73,7 @@ export async function getResolvedTicketsReport(
        hora_respuesta,
        accion_tomada,
        primer_contacto,
-       tiempo_minutos,
+       CASE WHEN tiempo_minutos IS NULL THEN NULL ELSE GREATEST(tiempo_minutos, 1) END AS tiempo_minutos,
        mes_atencion,
        categoria,
        porcentaje,

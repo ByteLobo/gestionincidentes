@@ -4,14 +4,17 @@
 WITH recalculo AS (
   SELECT
     id,
-    FLOOR(
-      EXTRACT(
-        EPOCH FROM (
-          (fecha_respuesta::timestamp + hora_respuesta) -
-          (fecha_toma::timestamp + hora_toma)
-        )
-      ) / 60
-    )::int AS diff_minutes
+    GREATEST(
+      1,
+      FLOOR(
+        EXTRACT(
+          EPOCH FROM (
+            (fecha_respuesta::timestamp + hora_respuesta) -
+            (fecha_toma::timestamp + hora_toma)
+          )
+        ) / 60
+      )::int
+    ) AS diff_minutes
   FROM incidents
   WHERE estado = 'RESUELTO'
     AND fecha_toma IS NOT NULL
@@ -21,6 +24,7 @@ WITH recalculo AS (
     AND (fecha_respuesta::timestamp + hora_respuesta) >= (fecha_toma::timestamp + hora_toma)
     AND (
       tiempo_minutos IS NULL OR
+      tiempo_minutos < 1 OR
       categoria IS NULL OR
       porcentaje IS NULL OR
       regla_porcentaje IS NULL OR

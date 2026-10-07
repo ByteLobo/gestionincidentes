@@ -40,16 +40,16 @@ export async function GET(req: Request) {
   const result = await db.query(
     `SELECT
        CASE
-         WHEN tiempo_minutos < 60 THEN 'Menos de 1 hora'
-         WHEN tiempo_minutos < 120 THEN '1 - 2 horas'
-         WHEN tiempo_minutos < 240 THEN '2 - 4 horas'
+         WHEN GREATEST(tiempo_minutos, 1) < 60 THEN 'Menos de 1 hora'
+         WHEN GREATEST(tiempo_minutos, 1) < 120 THEN '1 - 2 horas'
+         WHEN GREATEST(tiempo_minutos, 1) < 240 THEN '2 - 4 horas'
          ELSE 'Más de 4 horas'
        END AS rango,
        COUNT(*)::int AS total
      FROM incidents
      ${whereSql}
      GROUP BY rango
-     ORDER BY MIN(tiempo_minutos) ASC`,
+     ORDER BY MIN(GREATEST(tiempo_minutos, 1)) ASC`,
     values
   );
 

@@ -6,6 +6,7 @@ Proyecto base en Next.js (App Router + TypeScript) con autenticación JWT y form
 
 - Node.js 18+
 - PostgreSQL
+- Python 3 con soporte para entornos virtuales (requerido para exportar reportes KPI)
 
 ## Configuración
 
@@ -25,8 +26,18 @@ psql "$DATABASE_URL" -f db/schema.sql
 
 ```bash
 npm install
+python3 -m venv .venv-reporting
+.venv-reporting/bin/pip install -r scripts/reporting/requirements.txt
 npm run dev
 ```
+
+Configura el intérprete del exportador en tu archivo de entorno:
+
+```env
+KPI_REPORT_PYTHON=.venv-reporting/bin/python
+```
+
+En Debian/Ubuntu puede ser necesario instalar primero el paquete `python3-venv`.
 
 ## Entorno de producción (misma BD)
 
@@ -41,6 +52,7 @@ cp .env.production.example .env.production.local
 2) Configura variables reales en `.env.production.local`:
 - `DATABASE_URL` (puede ser la misma que usas hoy)
 - `JWT_SECRET`
+- `KPI_REPORT_PYTHON` (ruta al Python que tenga instalado `xlsxwriter`)
 - opcionales: `EXTERNAL_API_KEY`, `WEBHOOK_TARGET_URL`, `WEBHOOK_SECRET`
 
 3) Compila y levanta:

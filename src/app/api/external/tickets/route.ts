@@ -142,7 +142,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Respuesta anterior al reporte" }, { status: 400 });
   }
 
-  const diffMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const diffMinutes = Math.max(1, Math.floor((end.getTime() - start.getTime()) / 60000));
   const createdAt = new Date();
   const monthAttention = monthFromDate(createdAt);
   const categoria = categoriaPorTiempo(diffMinutes);
@@ -266,7 +266,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Respuesta anterior al reporte" }, { status: 400 });
   }
 
-  const diffMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const diffMinutes = Math.max(1, Math.floor((end.getTime() - start.getTime()) / 60000));
   const monthAttention = monthFromDate(new Date());
   const categoria = categoriaPorTiempo(diffMinutes);
   const { porcentaje, regla } = porcentajePorTiempo(diffMinutes);

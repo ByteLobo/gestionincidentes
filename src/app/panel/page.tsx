@@ -1,24 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
-type User = { id: number; username: string; role: string; roles?: string[] } | null;
+type User = { id: number; username: string; role: string; roles?: string[] };
 
 type Tab = { label: string; href: string; roles: string[] };
 
 export default function PanelPage() {
-  const [user, setUser] = useState<User>(null);
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     async function load() {
-      const res = await fetch("/api/auth/me");
-      const data = await res.json().catch(() => ({}));
-      setUser(data?.user ?? null);
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error("No se pudo consultar la sesión");
+        if (!data?.user) {
+          router.replace("/login?from=/panel");
+          return;
+        }
+        setUser(data.user);
+      } catch {
+        setLoadError(true);
+      }
     }
     void load();
-  }, []);
+  }, [router]);
 
   const tabs: Tab[] = useMemo(
     () => [
@@ -56,7 +68,9 @@ export default function PanelPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {!user ? (
+        {loadError ? (
+          <p className="error">No se pudo cargar la sesión. Recarga la página o vuelve a iniciar sesión.</p>
+        ) : !user ? (
           <p className="muted">Cargando usuario...</p>
         ) : (
           <div className="nav-links">

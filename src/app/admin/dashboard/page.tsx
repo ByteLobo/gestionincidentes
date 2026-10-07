@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Controller, useForm, type Control, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,12 +30,14 @@ import {
 } from "recharts";
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Filter, LayoutDashboard, RefreshCw, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, LayoutDashboard, RefreshCw, Search, UsersRound, X } from "lucide-react";
 import { normalizeDashboardFilters, type DashboardFilters } from "@/lib/dashboard-filters";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const colors = ["#0b6e81", "#2b7a78", "#d08c32", "#e07a5f", "#81b29a", "#3d5a80", "#7c9885", "#4f6d7a"];
 const pageSize = 25;
+const supportPageSize = 10;
 const dashboardFormSchema = z.object({
   fechaDesde: z.string(),
   fechaHasta: z.string(),
@@ -77,6 +79,8 @@ type DashboardOptions = {
 
 type ChartItem = { name: string; total: number };
 type TrendItem = { period: string; total: number; resueltos: number };
+type AssigneeItem = { name: string; total: number; resueltos: number; abiertos: number };
+type RequesterItem = { name: string; total: number; resueltos: number; abiertos: number };
 
 type DashboardRow = {
   id: number;
@@ -90,7 +94,7 @@ type DashboardRow = {
   encargado: string;
   estado: string;
   fecha_reporte: string;
-  tiempo_minutos: number;
+  tiempo_minutos: number | null;
   primer_contacto: boolean;
   created_at: string;
 };
@@ -110,6 +114,8 @@ type DashboardSummaryData = {
     byCanal: ChartItem[];
     topMotivos: ChartItem[];
     trend: TrendItem[];
+    byAssignee: AssigneeItem[];
+    topRequesters: RequesterItem[];
   };
   appliedFilters: DashboardFilters;
   scope: {
@@ -217,10 +223,13 @@ function buildQueryString(filters: FilterValues, page: number, sorting: SortingS
   return params.toString();
 }
 
-function formatMetricMinutes(minutes: number) {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
+function formatMetricMinutes(minutes: number | null) {
+  if (minutes === null) return "--";
+  if (minutes === 0) return "0 min";
+  const normalizedMinutes = Math.max(1, minutes);
+  if (normalizedMinutes < 60) return `${normalizedMinutes} min`;
+  const hours = Math.floor(normalizedMinutes / 60);
+  const rest = normalizedMinutes % 60;
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
@@ -273,6 +282,8 @@ function DashboardContent() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: initialTableState.sortBy, desc: initialTableState.sortDir === "desc" },
   ]);
+  const [selectedSupport, setSelectedSupport] = useState("");
+  const [supportPage, setSupportPage] = useState(1);
 
   const {
     control,
@@ -321,6 +332,40 @@ function DashboardContent() {
     },
     placeholderData: keepPreviousData,
   });
+
+  const supportRowsQuery = useQuery({
+    queryKey: ["dashboard-support-rows", submittedFilters, selectedSupport, supportPage],
+    enabled: Boolean(selectedSupport),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      const normalized = toDashboardFilters({ ...submittedFilters, encargado: selectedSupport });
+      for (const [key, value] of Object.entries(normalized)) {
+        if (value) params.set(key, value);
+      }
+      params.set("page", String(supportPage));
+      params.set("pageSize", String(supportPageSize));
+      params.set("sortBy", "created_at");
+      params.set("sortDir", "desc");
+      return fetchJson<DashboardRowsData>(`/api/admin/dashboard/rows?${params.toString()}`);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const supportSheets = useMemo(
+    () => summaryQuery.data?.charts.byAssignee ?? [],
+    [summaryQuery.data?.charts.byAssignee]
+  );
+
+  useEffect(() => {
+    if (supportSheets.length === 0) {
+      setSelectedSupport("");
+      return;
+    }
+    if (!supportSheets.some((item) => item.name === selectedSupport)) {
+      setSelectedSupport(supportSheets[0].name);
+      setSupportPage(1);
+    }
+  }, [selectedSupport, supportSheets]);
 
   const columns = useMemo(
     () => [
@@ -424,6 +469,8 @@ function DashboardContent() {
 
   const summary = summaryQuery.data;
   const rows = rowsQuery.data;
+  const supportRows = supportRowsQuery.data;
+  const maxRequesterTotal = Math.max(1, ...(summary?.charts.topRequesters ?? []).map((item) => item.total));
 
   return (
     <main className="page">
@@ -547,6 +594,7 @@ function DashboardContent() {
               onClick={() => {
                 void summaryQuery.refetch();
                 void rowsQuery.refetch();
+                if (selectedSupport) void supportRowsQuery.refetch();
               }}
             >
               <RefreshCw className="h-4 w-4" />
@@ -566,6 +614,121 @@ function DashboardContent() {
         <MetricCard label="Resolución" value={`${summary?.metrics.tasaResolucion ?? 0}%`} />
         <MetricCard label="Primer contacto" value={`${summary?.metrics.primerContactoPct ?? 0}%`} />
         <MetricCard label="Tiempo promedio" value={formatMetricMinutes(summary?.metrics.promedioMinutos ?? 0)} />
+      </section>
+
+      <section className="card stack support-sheets">
+        <div className="page-header support-sheets__header">
+          <div>
+            <h2 className="section-title">Tickets por usuario de soporte</h2>
+            <p className="page-lead">
+              Cada hoja conserva los filtros globales —excepto el encargado— y muestra los tickets asignados a esa persona.
+            </p>
+          </div>
+          <span className="topbar-chip topbar-chip--accent">
+            <UsersRound className="h-4 w-4" />
+            {supportSheets.length} usuarios
+          </span>
+        </div>
+
+        {summaryQuery.isLoading ? (
+          <p className="muted">Preparando hojas de soporte...</p>
+        ) : supportSheets.length === 0 ? (
+          <p className="muted">No hay usuarios de soporte disponibles para el alcance actual.</p>
+        ) : (
+          <Tabs
+            className="support-sheets__root"
+            value={selectedSupport}
+            onValueChange={(value) => {
+              setSelectedSupport(value);
+              setSupportPage(1);
+            }}
+          >
+            <TabsList className="support-sheets__tabs" aria-label="Usuarios de soporte">
+              {supportSheets.map((item) => (
+                <TabsTrigger key={item.name} value={item.name} className="support-sheet-tab">
+                  <span>{item.name}</span>
+                  <strong>{item.total}</strong>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <div className="support-sheet-panel" role="tabpanel" aria-live="polite">
+              <div className="support-sheet-summary">
+                <div>
+                  <span>Usuario seleccionado</span>
+                  <strong>{selectedSupport}</strong>
+                </div>
+                <div>
+                  <span>Resueltos</span>
+                  <strong>{supportSheets.find((item) => item.name === selectedSupport)?.resueltos ?? 0}</strong>
+                </div>
+                <div>
+                  <span>Abiertos</span>
+                  <strong>{supportSheets.find((item) => item.name === selectedSupport)?.abiertos ?? 0}</strong>
+                </div>
+              </div>
+
+              {supportRowsQuery.isError ? (
+                <p className="error">{supportRowsQuery.error.message}</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="table support-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>Ticket</th>
+                        <th>Solicitante</th>
+                        <th>Servicio</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                        <th>Tiempo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {supportRowsQuery.isLoading ? (
+                        <tr><td colSpan={6}><span className="muted">Cargando tickets asignados...</span></td></tr>
+                      ) : (supportRows?.items.length ?? 0) === 0 ? (
+                        <tr><td colSpan={6}><span className="muted">Este usuario no tiene tickets para los filtros actuales.</span></td></tr>
+                      ) : (
+                        supportRows?.items.map((item) => (
+                          <tr key={item.id}>
+                            <td><strong>#{item.id}</strong></td>
+                            <td>{item.solicitante}</td>
+                            <td>{item.tipo_servicio}</td>
+                            <td>{item.estado}</td>
+                            <td>{format(new Date(item.fecha_reporte), "dd/MM/yyyy")}</td>
+                            <td>{formatMetricMinutes(item.tiempo_minutos)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="actions-row support-sheet-pagination">
+                <button
+                  className="nav-link"
+                  type="button"
+                  onClick={() => setSupportPage((current) => Math.max(1, current - 1))}
+                  disabled={!supportRows?.meta.hasPreviousPage}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Anterior
+                </button>
+                <span className="topbar-chip">
+                  Página {supportRows?.meta.page ?? 1} de {supportRows?.meta.totalPages ?? 1} · {supportRows?.meta.totalItems ?? 0} tickets
+                </span>
+                <button
+                  className="nav-link"
+                  type="button"
+                  onClick={() => setSupportPage((current) => current + 1)}
+                  disabled={!supportRows?.meta.hasNextPage}
+                >
+                  Siguiente <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </Tabs>
+        )}
       </section>
 
       <section className="dashboard-grid">
@@ -672,6 +835,35 @@ function DashboardContent() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card dashboard-grid__full requester-demand">
+          <div className="page-header requester-demand__header">
+            <div>
+              <h2 className="section-title">Personas que más tickets solicitan</h2>
+              <p className="page-lead">Ranking de demanda para detectar usuarios que podrían necesitar atención preventiva.</p>
+            </div>
+            <span className="topbar-chip">Top 10 · filtro actual</span>
+          </div>
+          <div className="requester-demand__list">
+            {(summary?.charts.topRequesters ?? []).length === 0 ? (
+              <p className="muted">No hay solicitantes para los filtros actuales.</p>
+            ) : (
+              (summary?.charts.topRequesters ?? []).map((item, index) => (
+                <div className="requester-demand__row" key={item.name}>
+                  <span className="requester-demand__rank">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="requester-demand__identity">
+                    <strong>{item.name}</strong>
+                    <span>{item.resueltos} resueltos · {item.abiertos} abiertos</span>
+                  </div>
+                  <div className="requester-demand__track" aria-hidden="true">
+                    <span style={{ width: `${(item.total / maxRequesterTotal) * 100}%` }} />
+                  </div>
+                  <strong className="requester-demand__total">{item.total}</strong>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

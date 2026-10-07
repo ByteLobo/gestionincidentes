@@ -1225,6 +1225,176 @@ button {
   gap: 10px;
 }
 
+.support-sheets__header,
+.requester-demand__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.support-sheets,
+.support-sheets__root,
+.support-sheet-panel,
+.support-sheet-panel .table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.support-sheets__root,
+.support-sheet-panel .table-wrap {
+  width: 100%;
+}
+
+.support-sheets__tabs {
+  display: flex;
+  width: 100%;
+  height: auto;
+  justify-content: start;
+  gap: 8px;
+  padding: 0 0 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(84, 103, 120, 0.12);
+  border-radius: 0;
+  background: transparent;
+  scrollbar-color: rgba(11, 110, 129, 0.34) transparent;
+}
+
+.support-sheet-tab {
+  display: inline-flex;
+  min-height: 44px;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(84, 103, 120, 0.14);
+  border-radius: 12px;
+  background: hsl(var(--surface) / 0.62);
+  color: hsl(var(--muted));
+}
+
+.support-sheet-tab strong {
+  min-width: 28px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(84, 103, 120, 0.1);
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.support-sheet-tab[data-state="active"] {
+  border-color: rgba(11, 110, 129, 0.28);
+  background: rgba(11, 110, 129, 0.11);
+  color: hsl(var(--primary));
+  box-shadow: none;
+}
+
+.support-sheet-tab:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.support-sheet-panel {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.support-sheet-summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(120px, 0.5fr));
+  gap: 12px;
+}
+
+.support-sheet-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: hsl(var(--surface) / 0.58);
+}
+
+.support-sheet-summary span {
+  color: hsl(var(--muted));
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.support-sheet-summary strong,
+.support-sheet-table td:last-child,
+.requester-demand__rank,
+.requester-demand__total {
+  font-variant-numeric: tabular-nums;
+}
+
+.support-sheet-pagination {
+  justify-content: space-between;
+}
+
+.requester-demand__list {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.requester-demand__row {
+  display: grid;
+  grid-template-columns: 40px minmax(190px, 1fr) minmax(180px, 2fr) 48px;
+  gap: 14px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.requester-demand__row:hover {
+  background: hsl(var(--surface) / 0.62);
+}
+
+.requester-demand__rank {
+  color: hsl(var(--muted));
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.requester-demand__identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.requester-demand__identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requester-demand__identity span {
+  color: hsl(var(--muted));
+  font-size: 0.82rem;
+}
+
+.requester-demand__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(84, 103, 120, 0.12);
+}
+
+.requester-demand__track span {
+  display: block;
+  min-width: 4px;
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--primary));
+}
+
+.requester-demand__total {
+  text-align: right;
+  font-size: 1.05rem;
+}
+
 .chart-panel {
   display: grid;
   gap: 14px;
@@ -1537,6 +1707,33 @@ button {
 
   .dashboard-chart {
     height: 280px;
+  }
+
+  .support-sheets__header,
+  .requester-demand__header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .support-sheet-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .support-sheet-summary > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .support-sheet-pagination {
+    justify-content: center;
+  }
+
+  .requester-demand__row {
+    grid-template-columns: 32px minmax(0, 1fr) 42px;
+    gap: 10px;
+  }
+
+  .requester-demand__track {
+    grid-column: 2 / -1;
   }
 
   .dialog-panel__header,
