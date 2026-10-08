@@ -243,6 +243,92 @@ def write_ticket_sheet(
         worksheet.write(row_index, 18, item["estado"], center_fmt)
 
 
+def write_unresolved_ticket_section(
+    workbook: xlsxwriter.Workbook,
+    worksheet: xlsxwriter.worksheet.Worksheet,
+    items: list[dict[str, Any]],
+    start_row: int,
+) -> int:
+    """Write an executive-friendly list of tickets that still require follow-up."""
+    section_fmt = workbook.add_format({
+        "bold": True,
+        "font_size": 13,
+        "font_color": "#16324F",
+    })
+    subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
+    header_fmt = workbook.add_format({
+        "bold": True,
+        "bg_color": "#16324F",
+        "font_color": "#FFFFFF",
+        "border": 1,
+        "align": "center",
+        "valign": "vcenter",
+        "text_wrap": True,
+    })
+    text_fmt = workbook.add_format({"border": 1, "valign": "top", "text_wrap": True})
+    center_fmt = workbook.add_format({"border": 1, "align": "center", "valign": "top"})
+    empty_fmt = workbook.add_format({
+        "bg_color": "#F7FBFE",
+        "font_color": "#4B5D70",
+        "border": 1,
+        "italic": True,
+    })
+
+    unresolved_items = [item for item in items if item.get("estado") != "RESUELTO"]
+    worksheet.write(start_row, 0, "Tickets pendientes de resolución", section_fmt)
+    worksheet.write(
+        start_row + 1,
+        0,
+        f"{len(unresolved_items)} ticket(s) del período aún no se han resuelto.",
+        subtitle_fmt,
+    )
+
+    header_row = start_row + 3
+    columns = [
+        "ID",
+        "Solicitante",
+        "Tipo de servicio",
+        "Motivo",
+        "Descripción",
+        "Encargado",
+        "Fecha de reporte",
+        "Estado",
+    ]
+    for column, label in enumerate(columns):
+        worksheet.write(header_row, column, label, header_fmt)
+
+    if not unresolved_items:
+        worksheet.merge_range(
+            header_row + 1,
+            0,
+            header_row + 1,
+            len(columns) - 1,
+            "Todos los tickets del período están resueltos.",
+            empty_fmt,
+        )
+        return header_row + 2
+
+    for offset, item in enumerate(unresolved_items, start=1):
+        row = header_row + offset
+        worksheet.write_number(row, 0, item["id"], center_fmt)
+        worksheet.write(row, 1, item.get("solicitante") or "", text_fmt)
+        worksheet.write(row, 2, item.get("tipo_servicio") or "", text_fmt)
+        worksheet.write(row, 3, item.get("motivo_servicio") or "", text_fmt)
+        worksheet.write(row, 4, item.get("descripcion") or "", text_fmt)
+        worksheet.write(row, 5, item.get("encargado") or "", text_fmt)
+        worksheet.write(
+            row,
+            6,
+            format_datetime(item.get("fecha_reporte"), item.get("hora_reporte")),
+            center_fmt,
+        )
+        worksheet.write(row, 7, item.get("estado") or "Sin estado", center_fmt)
+
+    last_row = header_row + len(unresolved_items)
+    worksheet.autofilter(header_row, 0, last_row, len(columns) - 1)
+    return last_row + 1
+
+
 def build_requester_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, int]] = defaultdict(lambda: {"total": 0, "resueltos": 0, "abiertos": 0})
     for item in items:
@@ -471,20 +557,16 @@ def write_support_kpi_sheet(
     worksheet.write_url("A3", "internal:'Resumen KPI'!A1", link_fmt, "Volver al resumen general")
 
     total_items = len(items)
-    first_contact_items = sum(1 for item in items if item.get("primer_contacto"))
+    resolved_items = sum(1 for item in items if item.get("estado") == "RESUELTO")
     avg_minutes = average_resolution_minutes(items)
-    avg_percentage_values = [
-        float(item["porcentaje"])
-        for item in items
-        if item.get("porcentaje") is not None
-    ]
-    avg_percentage = sum(avg_percentage_values) / len(avg_percentage_values) if avg_percentage_values else 0
+    fulfillment = percentage(resolved_items, total_items)
+    avg_hours = avg_minutes / 60
 
     cards = [
-        ("Tickets atendidos", total_items),
-        ("Primer contacto", first_contact_items),
-        ("Promedio minutos", int(math.floor(avg_minutes)) if avg_minutes else 0),
-        ("KPI promedio", f"{avg_percentage:.1f}%" if avg_percentage_values else "--"),
+        ("Total de tickets solicitados", total_items),
+        ("Tickets resueltos", resolved_items),
+        ("Cumplimiento de tickets", f"{fulfillment:.1f}%"),
+        ("Promedio de atención (horas)", f"{avg_hours:.1f} h"),
     ]
     for index, (label, value) in enumerate(cards):
         col = index * 3
@@ -820,10 +902,28 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     next_row += 1
     next_row += write_chart_block(summary_sheet, workbook, "Tickets por usuario de soporte", next_row, 0, support_rows, "#0B6E81")
     next_row += 1
-    write_chart_block(summary_sheet, workbook, "Personas que mas tickets solicitan", next_row, 0, requester_chart_rows, "#D08C32")
+    next_row += write_chart_block(
+        summary_sheet,
+        workbook,
+        "Personas que mas tickets solicitan",
+        next_row,
+        0,
+        requester_chart_rows,
+        "#D08C32",
+    )
+    next_row += 2
+    unresolved_section_row = next_row
+    write_unresolved_ticket_section(workbook, summary_sheet, items, unresolved_section_row)
 
     summary_sheet.write(0, 14, "Navegacion del reporte", link_header_fmt)
     summary_sheet.write_url(1, 14, "internal:'Solicitantes'!A1", link_fmt, "Ranking de solicitantes")
+    summary_sheet.write_url(
+        4,
+        14,
+        f"internal:'Resumen KPI'!A{unresolved_section_row + 1}",
+        link_fmt,
+        "Tickets pendientes de resolución",
+    )
     if previous_meta:
         summary_sheet.write_url(2, 14, "internal:'Comparativa'!A1", link_fmt, "Actual vs periodo anterior")
         summary_sheet.write_url(3, 14, "internal:'Detalle anterior'!A1", link_fmt, "Detalle del periodo anterior")
