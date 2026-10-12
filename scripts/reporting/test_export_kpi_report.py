@@ -7,7 +7,7 @@ from pathlib import Path
 
 from export_kpi_report import (
     build_requester_rows,
-    build_top_requester_service_rows,
+    build_top_requester_reason_rows,
     build_workbook,
     total_resolution_minutes,
 )
@@ -19,6 +19,7 @@ def make_ticket(
     service: str,
     assignee: str,
     minutes: int | None,
+    reason: str = "Solicitud",
 ) -> dict[str, object]:
     return {
         "id": ticket_id,
@@ -27,7 +28,7 @@ def make_ticket(
         "tipo_servicio": service,
         "canal_oficina": "Mesa de ayuda",
         "gerencia": "Tecnología",
-        "motivo_servicio": "Solicitud",
+        "motivo_servicio": reason,
         "descripcion": "Caso de prueba",
         "encargado": assignee,
         "fecha_reporte": "2026-09-01",
@@ -57,20 +58,20 @@ class ReportCalculationsTest(unittest.TestCase):
 
         self.assertEqual(total_resolution_minutes(items), 121)
 
-    def test_top_five_requesters_include_their_most_requested_service(self) -> None:
+    def test_top_five_requesters_include_their_most_requested_reason(self) -> None:
         items = [
-            make_ticket(1, "Ana", "Correo", "Soporte 1", 30),
-            make_ticket(2, "Ana", "Acceso", "Soporte 1", 30),
-            make_ticket(3, "Ana", "Correo", "Soporte 1", 30),
-            make_ticket(4, "Bruno", "VPN", "Soporte 2", 60),
-            make_ticket(5, "Bruno", "Acceso", "Soporte 2", 60),
+            make_ticket(1, "Ana", "Correo", "Soporte 1", 30, "Contraseña"),
+            make_ticket(2, "Ana", "Acceso", "Soporte 1", 30, "Instalación"),
+            make_ticket(3, "Ana", "Correo", "Soporte 1", 30, "Contraseña"),
+            make_ticket(4, "Bruno", "VPN", "Soporte 2", 60, "Conectividad"),
+            make_ticket(5, "Bruno", "Acceso", "Soporte 2", 60, "Actualización"),
         ]
 
         requester_rows = build_requester_rows(items)
-        result = build_top_requester_service_rows(items, requester_rows)
+        result = build_top_requester_reason_rows(items, requester_rows)
 
-        self.assertEqual(result[0], (1, "Ana", "Correo", 2))
-        self.assertEqual(result[1], (2, "Bruno", "Acceso", 1))
+        self.assertEqual(result[0], (1, "Ana", "Contraseña", 2))
+        self.assertEqual(result[1], (2, "Bruno", "Actualización", 1))
 
     def test_workbook_contains_new_management_metrics_and_tables(self) -> None:
         items = [
@@ -99,7 +100,7 @@ class ReportCalculationsTest(unittest.TestCase):
         self.assertIn("Promedio de atención (minutos)", shared_strings)
         self.assertIn("Tiempo total de atención (minutos)", shared_strings)
         self.assertIn("Horas de atención", shared_strings)
-        self.assertIn("Servicio más solicitado por los 5 principales solicitantes", shared_strings)
+        self.assertIn("Motivo más solicitado por los 5 principales solicitantes", shared_strings)
 
 
 if __name__ == "__main__":

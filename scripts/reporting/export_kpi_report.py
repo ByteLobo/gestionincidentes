@@ -350,31 +350,31 @@ def build_requester_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def build_top_requester_service_rows(
+def build_top_requester_reason_rows(
     items: list[dict[str, Any]],
     requester_rows: list[dict[str, Any]],
     limit: int = 5,
 ) -> list[tuple[int, str, str, int]]:
     top_requesters = [row["name"] for row in requester_rows[:limit]]
-    services_by_requester: dict[str, Counter[str]] = {
+    reasons_by_requester: dict[str, Counter[str]] = {
         requester: Counter() for requester in top_requesters
     }
 
     for item in items:
         requester = str(item.get("solicitante") or "Sin dato").strip() or "Sin dato"
-        if requester not in services_by_requester:
+        if requester not in reasons_by_requester:
             continue
-        service = str(item.get("tipo_servicio") or "Sin dato").strip() or "Sin dato"
-        services_by_requester[requester][service] += 1
+        reason = str(item.get("motivo_servicio") or "Sin dato").strip() or "Sin dato"
+        reasons_by_requester[requester][reason] += 1
 
     rows: list[tuple[int, str, str, int]] = []
     for position, requester in enumerate(top_requesters, start=1):
-        ranked_services = sorted(
-            services_by_requester[requester].items(),
+        ranked_reasons = sorted(
+            reasons_by_requester[requester].items(),
             key=lambda entry: (-entry[1], entry[0].casefold()),
         )
-        service, total = ranked_services[0] if ranked_services else ("Sin dato", 0)
-        rows.append((position, requester, service, total))
+        reason, total = ranked_reasons[0] if ranked_reasons else ("Sin dato", 0)
+        rows.append((position, requester, reason, total))
     return rows
 
 
@@ -382,7 +382,7 @@ def write_requester_sheet(
     workbook: xlsxwriter.Workbook,
     worksheet: xlsxwriter.worksheet.Worksheet,
     rows: list[dict[str, Any]],
-    service_rows: list[tuple[int, str, str, int]],
+    reason_rows: list[tuple[int, str, str, int]],
 ) -> None:
     title_fmt = workbook.add_format({"bold": True, "font_size": 18, "font_color": "#16324F"})
     subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
@@ -433,16 +433,16 @@ def write_requester_sheet(
         chart.set_size({"width": 720, "height": 360})
         worksheet.insert_chart("G4", chart)
 
-    service_table_row = max(len(rows) + 6, 23)
-    write_requester_service_table(
+    reason_table_row = max(len(rows) + 6, 23)
+    write_requester_reason_table(
         workbook,
         worksheet,
-        service_table_row,
-        service_rows,
+        reason_table_row,
+        reason_rows,
     )
 
 
-def write_requester_service_table(
+def write_requester_reason_table(
     workbook: xlsxwriter.Workbook,
     worksheet: xlsxwriter.worksheet.Worksheet,
     start_row: int,
@@ -460,26 +460,26 @@ def write_requester_service_table(
     text_fmt = workbook.add_format({"border": 1})
     number_fmt = workbook.add_format({"border": 1, "align": "center"})
 
-    worksheet.write(start_row, 0, "Servicio más solicitado por los 5 principales solicitantes", title_fmt)
+    worksheet.write(start_row, 0, "Motivo más solicitado por los 5 principales solicitantes", title_fmt)
     worksheet.write(
         start_row + 1,
         0,
-        "El servicio principal se determina por cantidad de tickets en el rango seleccionado.",
+        "El motivo principal se determina por cantidad de tickets en el rango seleccionado.",
         subtitle_fmt,
     )
     header_row = start_row + 2
-    for column, label in enumerate(["Posición", "Solicitante", "Servicio más solicitado", "Tickets"]):
+    for column, label in enumerate(["Posición", "Solicitante", "Motivo más solicitado", "Tickets"]):
         worksheet.write(header_row, column, label, header_fmt)
 
     if not rows:
         worksheet.merge_range(header_row + 1, 0, header_row + 1, 3, "Sin datos en el rango seleccionado", text_fmt)
         return 4
 
-    for offset, (position, requester, service, total) in enumerate(rows, start=1):
+    for offset, (position, requester, reason, total) in enumerate(rows, start=1):
         row = header_row + offset
         worksheet.write_number(row, 0, position, number_fmt)
         worksheet.write(row, 1, requester, text_fmt)
-        worksheet.write(row, 2, service, text_fmt)
+        worksheet.write(row, 2, reason, text_fmt)
         worksheet.write_number(row, 3, total, number_fmt)
 
     return len(rows) + 4
@@ -966,7 +966,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         support_groups = dict(fallback_groups)
 
     requester_rows = build_requester_rows(items)
-    requester_service_rows = build_top_requester_service_rows(items, requester_rows)
+    requester_reason_rows = build_top_requester_reason_rows(items, requester_rows)
     used_sheet_names = {"detalle", "resumen kpi", "solicitantes", "comparativa", "detalle anterior"}
     support_sheet_names = {
         assignee: allocate_sheet_name(f"Soporte - {assignee}", used_sheet_names)
@@ -1017,7 +1017,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     link_fmt = workbook.add_format({"font_color": "#0B6E81", "underline": True, "border": 1})
 
     write_ticket_sheet(workbook, detail_sheet, items)
-    write_requester_sheet(workbook, requester_sheet, requester_rows, requester_service_rows)
+    write_requester_sheet(workbook, requester_sheet, requester_rows, requester_reason_rows)
     if comparison_sheet is not None and previous_detail_sheet is not None and previous_meta is not None:
         write_comparison_sheet(
             workbook,
@@ -1104,11 +1104,11 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         "#D08C32",
     )
     next_row += 1
-    next_row += write_requester_service_table(
+    next_row += write_requester_reason_table(
         workbook,
         summary_sheet,
         next_row,
-        requester_service_rows,
+        requester_reason_rows,
     )
     next_row += 1
     unresolved_section_row = next_row
