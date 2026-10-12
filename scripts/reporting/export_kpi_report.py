@@ -9,9 +9,10 @@ import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import xlsxwriter
+from xlsxwriter.utility import xl_rowcol_to_cell
 
 
 MONTH_NAMES = (
@@ -28,6 +29,38 @@ MONTH_NAMES = (
     "Noviembre",
     "Diciembre",
 )
+
+FormulaBuilder = Callable[[str, str], str]
+
+
+def excel_sheet_name(name: str) -> str:
+    return f"'{name.replace(chr(39), chr(39) * 2)}'"
+
+
+def excel_column_range(sheet_name: str, column: str) -> str:
+    return f"{excel_sheet_name(sheet_name)}!${column}:${column}"
+
+
+def countif_formula_builder(sheet_name: str, column: str) -> FormulaBuilder:
+    source_range = excel_column_range(sheet_name, column)
+    return lambda criteria_cell, _label: f"=COUNTIF({source_range},{criteria_cell})"
+
+
+def time_bucket_formula_builder(sheet_name: str) -> FormulaBuilder:
+    id_range = excel_column_range(sheet_name, "A")
+    minutes_range = excel_column_range(sheet_name, "O")
+
+    def build(_criteria_cell: str, label: str) -> str:
+        formulas = {
+            "Menos de 1 hora": f'=COUNTIFS({minutes_range},">=1",{minutes_range},"<60")',
+            "1 - 2 horas": f'=COUNTIFS({minutes_range},">=60",{minutes_range},"<120")',
+            "2 - 4 horas": f'=COUNTIFS({minutes_range},">=120",{minutes_range},"<240")',
+            "Mas de 4 horas": f'=COUNTIF({minutes_range},">=240")',
+            "Sin tiempo": f'=COUNTIFS({id_range},"<>",{minutes_range},"")',
+        }
+        return formulas[label]
+
+    return build
 
 
 def normalize_person_name(value: Any) -> str:
@@ -397,7 +430,7 @@ def write_requester_sheet(
     number_fmt = workbook.add_format({"border": 1, "align": "center"})
 
     worksheet.write("A1", "Personas que más tickets solicitan", title_fmt)
-    worksheet.write("A2", "Ranking de demanda según el rango seleccionado", subtitle_fmt)
+    worksheet.write("A2", "Los totales se recalculan al corregir la hoja Detalle", subtitle_fmt)
     worksheet.set_column("A:A", 10)
     worksheet.set_column("B:B", 34)
     worksheet.set_column("C:E", 14)
@@ -409,11 +442,27 @@ def write_requester_sheet(
 
     for index, item in enumerate(rows, start=1):
         row = index + 3
+        excel_row = row + 1
         worksheet.write_number(row, 0, index, number_fmt)
         worksheet.write(row, 1, item["name"], text_fmt)
-        worksheet.write_number(row, 2, item["total"], number_fmt)
-        worksheet.write_number(row, 3, item["resueltos"], number_fmt)
-        worksheet.write_number(row, 4, item["abiertos"], number_fmt)
+        worksheet.write_formula(
+            row,
+            2,
+            f"=COUNTIF({excel_column_range('Detalle', 'C')},$B{excel_row})",
+            number_fmt,
+            item["total"],
+        )
+        worksheet.write_formula(
+            row,
+            3,
+            (
+                f"=COUNTIFS({excel_column_range('Detalle', 'C')},$B{excel_row},"
+                f'{excel_column_range("Detalle", "S")},"RESUELTO")'
+            ),
+            number_fmt,
+            item["resueltos"],
+        )
+        worksheet.write_formula(row, 4, f"=C{excel_row}-D{excel_row}", number_fmt, item["abiertos"])
 
     if rows:
         chart = workbook.add_chart({"type": "bar"})
@@ -439,6 +488,7 @@ def write_requester_sheet(
         worksheet,
         reason_table_row,
         reason_rows,
+        formula_source_sheet="Detalle",
     )
 
 
@@ -447,6 +497,7 @@ def write_requester_reason_table(
     worksheet: xlsxwriter.worksheet.Worksheet,
     start_row: int,
     rows: list[tuple[int, str, str, int]],
+    formula_source_sheet: str | None = None,
 ) -> int:
     title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
     subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
@@ -477,10 +528,18 @@ def write_requester_reason_table(
 
     for offset, (position, requester, reason, total) in enumerate(rows, start=1):
         row = header_row + offset
+        excel_row = row + 1
         worksheet.write_number(row, 0, position, number_fmt)
         worksheet.write(row, 1, requester, text_fmt)
         worksheet.write(row, 2, reason, text_fmt)
-        worksheet.write_number(row, 3, total, number_fmt)
+        if formula_source_sheet:
+            formula = (
+                f"=COUNTIFS({excel_column_range(formula_source_sheet, 'C')},$B{excel_row},"
+                f"{excel_column_range(formula_source_sheet, 'G')},$C{excel_row})"
+            )
+            worksheet.write_formula(row, 3, formula, number_fmt, total)
+        else:
+            worksheet.write_number(row, 3, total, number_fmt)
 
     return len(rows) + 4
 
@@ -492,6 +551,7 @@ def write_support_workload_block(
     start_row: int,
     rows: list[tuple[str, int, float]],
     color: str,
+    formula_source_sheet: str | None = None,
 ) -> int:
     title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
     header_fmt = workbook.add_format({
@@ -511,9 +571,28 @@ def write_support_workload_block(
 
     for index, (assignee, attentions, hours) in enumerate(rows, start=1):
         row = header_row + index
+        assignee_cell = xl_rowcol_to_cell(row, 0, row_abs=True, col_abs=True)
         worksheet.write(row, 0, assignee, label_fmt)
-        worksheet.write_number(row, 1, attentions, number_fmt)
-        worksheet.write_number(row, 2, hours, hours_fmt)
+        if formula_source_sheet:
+            assignee_range = excel_column_range(formula_source_sheet, "I")
+            minutes_range = excel_column_range(formula_source_sheet, "O")
+            worksheet.write_formula(
+                row,
+                1,
+                f"=COUNTIF({assignee_range},{assignee_cell})",
+                number_fmt,
+                attentions,
+            )
+            worksheet.write_formula(
+                row,
+                2,
+                f"=SUMIF({assignee_range},{assignee_cell},{minutes_range})/60",
+                hours_fmt,
+                hours,
+            )
+        else:
+            worksheet.write_number(row, 1, attentions, number_fmt)
+            worksheet.write_number(row, 2, hours, hours_fmt)
 
     chart_height = max(240, 70 + len(rows) * 28)
     if rows:
@@ -553,6 +632,7 @@ def write_chart_block(
     rows: list[tuple[str, int]],
     color: str,
     sheet_name: str | None = None,
+    formula_builder: FormulaBuilder | None = None,
 ) -> int:
     title_fmt = workbook.add_format({
         "bold": True,
@@ -574,8 +654,19 @@ def write_chart_block(
     worksheet.write(header_row, start_col + 1, "Total", table_header_fmt)
 
     for index, (label, total) in enumerate(rows, start=1):
-        worksheet.write(header_row + index, start_col, label, label_fmt)
-        worksheet.write_number(header_row + index, start_col + 1, total, value_fmt)
+        row = header_row + index
+        worksheet.write(row, start_col, label, label_fmt)
+        if formula_builder:
+            criteria_cell = xl_rowcol_to_cell(row, start_col, row_abs=True, col_abs=True)
+            worksheet.write_formula(
+                row,
+                start_col + 1,
+                formula_builder(criteria_cell, label),
+                value_fmt,
+                total,
+            )
+        else:
+            worksheet.write_number(row, start_col + 1, total, value_fmt)
 
     chart_height = max(240, 70 + len(rows) * 28)
     if rows:
@@ -782,6 +873,8 @@ def write_comparison_chart_block(
     title: str,
     start_row: int,
     rows: list[tuple[str, int, int]],
+    current_formula_builder: FormulaBuilder | None = None,
+    previous_formula_builder: FormulaBuilder | None = None,
 ) -> int:
     title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
     header_fmt = workbook.add_format({
@@ -800,10 +893,21 @@ def write_comparison_chart_block(
 
     for index, (label, current, previous) in enumerate(rows, start=1):
         row = header_row + index
+        criteria_cell = xl_rowcol_to_cell(row, 0, row_abs=True, col_abs=True)
+        excel_row = row + 1
         worksheet.write(row, 0, label, label_fmt)
-        worksheet.write_number(row, 1, current, number_fmt)
-        worksheet.write_number(row, 2, previous, number_fmt)
-        worksheet.write_number(row, 3, current - previous, number_fmt)
+        if current_formula_builder and previous_formula_builder:
+            worksheet.write_formula(
+                row, 1, current_formula_builder(criteria_cell, label), number_fmt, current
+            )
+            worksheet.write_formula(
+                row, 2, previous_formula_builder(criteria_cell, label), number_fmt, previous
+            )
+            worksheet.write_formula(row, 3, f"=B{excel_row}-C{excel_row}", number_fmt, current - previous)
+        else:
+            worksheet.write_number(row, 1, current, number_fmt)
+            worksheet.write_number(row, 2, previous, number_fmt)
+            worksheet.write_number(row, 3, current - previous, number_fmt)
 
     chart_height = max(260, 80 + len(rows) * 28)
     if rows:
@@ -880,53 +984,112 @@ def write_comparison_sheet(
     current_first_contact = sum(1 for item in current_items if item.get("primer_contacto"))
     previous_first_contact = sum(1 for item in previous_items if item.get("primer_contacto"))
     metrics = [
-        ("Tickets atendidos", float(current_total), float(previous_total), False),
+        (
+            "Tickets atendidos",
+            float(current_total),
+            float(previous_total),
+            False,
+            f"=COUNTA({excel_column_range('Detalle', 'A')})-1",
+            f"=COUNTA({excel_column_range('Detalle anterior', 'A')})-1",
+        ),
         (
             "Primer contacto",
             percentage(current_first_contact, current_total) / 100,
             percentage(previous_first_contact, previous_total) / 100,
             True,
+            (
+                f'=IFERROR(COUNTIF({excel_column_range("Detalle", "N")},"Si")/'
+                f'(COUNTA({excel_column_range("Detalle", "A")})-1),0)'
+            ),
+            (
+                f'=IFERROR(COUNTIF({excel_column_range("Detalle anterior", "N")},"Si")/'
+                f'(COUNTA({excel_column_range("Detalle anterior", "A")})-1),0)'
+            ),
         ),
-        ("Promedio minutos", average_resolution_minutes(current_items), average_resolution_minutes(previous_items), False),
-        ("Total minutos", total_resolution_minutes(current_items), total_resolution_minutes(previous_items), False),
-        ("KPI promedio", average_kpi_percentage(current_items) / 100, average_kpi_percentage(previous_items) / 100, True),
+        (
+            "Promedio minutos",
+            average_resolution_minutes(current_items),
+            average_resolution_minutes(previous_items),
+            False,
+            f"=IFERROR(AVERAGE({excel_column_range('Detalle', 'O')}),0)",
+            f"=IFERROR(AVERAGE({excel_column_range('Detalle anterior', 'O')}),0)",
+        ),
+        (
+            "Total minutos",
+            total_resolution_minutes(current_items),
+            total_resolution_minutes(previous_items),
+            False,
+            f"=SUM({excel_column_range('Detalle', 'O')})",
+            f"=SUM({excel_column_range('Detalle anterior', 'O')})",
+        ),
+        (
+            "KPI promedio",
+            average_kpi_percentage(current_items) / 100,
+            average_kpi_percentage(previous_items) / 100,
+            True,
+            f"=IFERROR(AVERAGE({excel_column_range('Detalle', 'R')})/100,0)",
+            f"=IFERROR(AVERAGE({excel_column_range('Detalle anterior', 'R')})/100,0)",
+        ),
     ]
 
     for column, label in enumerate(["Indicador", "Actual", "Anterior", "Variacion", "Variacion %"]):
         worksheet.write(5, column, label, header_fmt)
-    for index, (label, current, previous, is_percentage) in enumerate(metrics, start=6):
+    for index, (label, current, previous, is_percentage, current_formula, previous_formula) in enumerate(metrics, start=6):
         value_fmt = percent_fmt if is_percentage else number_fmt
+        excel_row = index + 1
         worksheet.write(index, 0, label, label_fmt)
-        worksheet.write_number(index, 1, current, value_fmt)
-        worksheet.write_number(index, 2, previous, value_fmt)
-        worksheet.write_number(index, 3, current - previous, value_fmt)
+        worksheet.write_formula(index, 1, current_formula, value_fmt, current)
+        worksheet.write_formula(index, 2, previous_formula, value_fmt, previous)
+        worksheet.write_formula(index, 3, f"=B{excel_row}-C{excel_row}", value_fmt, current - previous)
         if previous:
-            worksheet.write_number(index, 4, (current - previous) / previous, percent_fmt)
+            worksheet.write_formula(
+                index,
+                4,
+                f"=IFERROR((B{excel_row}-C{excel_row})/C{excel_row},0)",
+                percent_fmt,
+                (current - previous) / previous,
+            )
         else:
-            worksheet.write(index, 4, "--", number_fmt)
+            worksheet.write_formula(index, 4, "=0", percent_fmt, 0)
 
     chart_specs = [
         (
             "Tickets por usuario de soporte",
             align_series(build_series(current_items, "encargado"), build_series(previous_items, "encargado")),
+            countif_formula_builder("Detalle", "I"),
+            countif_formula_builder("Detalle anterior", "I"),
         ),
         (
             "Tickets por categoria KPI",
             align_series(build_series(current_items, "categoria"), build_series(previous_items, "categoria")),
+            countif_formula_builder("Detalle", "Q"),
+            countif_formula_builder("Detalle anterior", "Q"),
         ),
         (
             "Tickets por tipo de servicio",
             align_series(build_series(current_items, "tipo_servicio"), build_series(previous_items, "tipo_servicio")),
+            countif_formula_builder("Detalle", "D"),
+            countif_formula_builder("Detalle anterior", "D"),
         ),
         (
             "Tiempo de respuesta",
             align_series(build_time_series(current_items), build_time_series(previous_items)),
+            time_bucket_formula_builder("Detalle"),
+            time_bucket_formula_builder("Detalle anterior"),
         ),
     ]
 
     next_row = 12
-    for title, rows in chart_specs:
-        next_row += write_comparison_chart_block(worksheet, workbook, title, next_row, rows)
+    for title, rows, current_formula_builder, previous_formula_builder in chart_specs:
+        next_row += write_comparison_chart_block(
+            worksheet,
+            workbook,
+            title,
+            next_row,
+            rows,
+            current_formula_builder,
+            previous_formula_builder,
+        )
         next_row += 1
 
 
@@ -974,6 +1137,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     }
 
     workbook = xlsxwriter.Workbook(output_path.as_posix())
+    workbook.set_calc_mode("auto")
     summary_sheet = workbook.add_worksheet("Resumen KPI")
     detail_sheet = workbook.add_worksheet("Detalle")
     requester_sheet = workbook.add_worksheet("Solicitantes")
@@ -999,7 +1163,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         "valign": "vcenter",
         "text_wrap": True,
     })
-    card_value_fmt = workbook.add_format({
+    card_value_style = {
         "font_size": 16,
         "bold": True,
         "align": "center",
@@ -1007,7 +1171,11 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         "border": 1,
         "bg_color": "#F7FBFE",
         "font_color": "#0B4F6C",
-    })
+    }
+    card_value_fmt = workbook.add_format(card_value_style)
+    card_percent_fmt = workbook.add_format({**card_value_style, "num_format": "0.0%"})
+    card_average_minutes_fmt = workbook.add_format({**card_value_style, "num_format": '0.0 "min"'})
+    card_total_minutes_fmt = workbook.add_format({**card_value_style, "num_format": '0 "min"'})
     link_header_fmt = workbook.add_format({
         "bold": True,
         "bg_color": "#D9EAF7",
@@ -1039,7 +1207,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
 
     summary_sheet.write("A1", "Reporte KPI de tickets", title_fmt)
     summary_sheet.write("A2", f"Rango: {meta['fechaDesde']} a {meta['fechaHasta']}", subtitle_fmt)
-    summary_sheet.write("A3", "Resumen ejecutivo para seguimiento gerencial", subtitle_fmt)
+    summary_sheet.write("A3", "Corrige la hoja Detalle y Excel recalculará las tablas y gráficos", subtitle_fmt)
 
     total_items = len(items)
     resolved_items = sum(1 for item in items if item.get("estado") == "RESUELTO")
@@ -1048,17 +1216,46 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     fulfillment = percentage(resolved_items, total_items)
 
     cards = [
-        ("Total de tickets solicitados", total_items),
-        ("Tickets resueltos", resolved_items),
-        ("Cumplimiento de tickets", f"{fulfillment:.1f}%"),
-        ("Promedio de atención (minutos)", f"{avg_minutes:.1f} min"),
-        ("Tiempo total de atención (minutos)", f"{total_minutes:.0f} min"),
+        (
+            "Total de tickets solicitados",
+            f"=COUNTA({excel_column_range('Detalle', 'A')})-1",
+            total_items,
+            card_value_fmt,
+        ),
+        (
+            "Tickets resueltos",
+            f'=COUNTIF({excel_column_range("Detalle", "S")},"RESUELTO")',
+            resolved_items,
+            card_value_fmt,
+        ),
+        (
+            "Cumplimiento de tickets",
+            (
+                f'=IFERROR(COUNTIF({excel_column_range("Detalle", "S")},"RESUELTO")/'
+                f'(COUNTA({excel_column_range("Detalle", "A")})-1),0)'
+            ),
+            fulfillment / 100,
+            card_percent_fmt,
+        ),
+        (
+            "Promedio de atención (minutos)",
+            f"=IFERROR(AVERAGE({excel_column_range('Detalle', 'O')}),0)",
+            avg_minutes,
+            card_average_minutes_fmt,
+        ),
+        (
+            "Tiempo total de atención (minutos)",
+            f"=SUM({excel_column_range('Detalle', 'O')})",
+            total_minutes,
+            card_total_minutes_fmt,
+        ),
     ]
 
-    for index, (label, value) in enumerate(cards):
+    for index, (label, formula, cached_value, value_format) in enumerate(cards):
         col = index * 3
         summary_sheet.merge_range(4, col, 4, col + 1, label, card_label_fmt)
-        summary_sheet.merge_range(5, col, 7, col + 1, value, card_value_fmt)
+        summary_sheet.merge_range(5, col, 7, col + 1, "", value_format)
+        summary_sheet.write_formula(5, col, formula, value_format, cached_value)
 
     service_rows = build_series(items, "tipo_servicio")
     reason_rows = build_series(items, "motivo_servicio")
@@ -1077,13 +1274,49 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     next_row = 10
     next_row += write_history_chart(summary_sheet, workbook, next_row, history_rows)
     next_row += 1
-    next_row += write_chart_block(summary_sheet, workbook, "Tickets por tipo de servicio", next_row, 0, service_rows, "#1F77B4")
+    next_row += write_chart_block(
+        summary_sheet,
+        workbook,
+        "Tickets por tipo de servicio",
+        next_row,
+        0,
+        service_rows,
+        "#1F77B4",
+        formula_builder=countif_formula_builder("Detalle", "D"),
+    )
     next_row += 1
-    next_row += write_chart_block(summary_sheet, workbook, "Tickets por motivo de servicio", next_row, 0, reason_rows, "#FF7F0E")
+    next_row += write_chart_block(
+        summary_sheet,
+        workbook,
+        "Tickets por motivo de servicio",
+        next_row,
+        0,
+        reason_rows,
+        "#FF7F0E",
+        formula_builder=countif_formula_builder("Detalle", "G"),
+    )
     next_row += 1
-    next_row += write_chart_block(summary_sheet, workbook, "Tickets por canal de atencion", next_row, 0, channel_rows, "#2CA02C")
+    next_row += write_chart_block(
+        summary_sheet,
+        workbook,
+        "Tickets por canal de atencion",
+        next_row,
+        0,
+        channel_rows,
+        "#2CA02C",
+        formula_builder=countif_formula_builder("Detalle", "E"),
+    )
     next_row += 1
-    next_row += write_chart_block(summary_sheet, workbook, "Tiempo de respuesta", next_row, 0, time_rows, "#9467BD")
+    next_row += write_chart_block(
+        summary_sheet,
+        workbook,
+        "Tiempo de respuesta",
+        next_row,
+        0,
+        time_rows,
+        "#9467BD",
+        formula_builder=time_bucket_formula_builder("Detalle"),
+    )
     next_row += 1
     next_row += write_support_workload_block(
         summary_sheet,
@@ -1092,6 +1325,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         next_row,
         support_rows,
         "#0B6E81",
+        formula_source_sheet="Detalle",
     )
     next_row += 1
     next_row += write_chart_block(
@@ -1102,6 +1336,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         0,
         requester_chart_rows,
         "#D08C32",
+        formula_builder=countif_formula_builder("Detalle", "C"),
     )
     next_row += 1
     next_row += write_requester_reason_table(
@@ -1109,6 +1344,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         summary_sheet,
         next_row,
         requester_reason_rows,
+        formula_source_sheet="Detalle",
     )
     next_row += 1
     unresolved_section_row = next_row

@@ -82,6 +82,10 @@ class ReportCalculationsTest(unittest.TestCase):
         payload = {
             "meta": {"fechaDesde": "2026-09-01", "fechaHasta": "2026-09-30", "totalItems": 3},
             "items": items,
+            "comparison": {
+                "meta": {"fechaDesde": "2026-08-01", "fechaHasta": "2026-08-31", "totalItems": 1},
+                "items": [make_ticket(4, "Carla", "Acceso", "Soporte 1", 45)],
+            },
             "history": {
                 "meta": {"fechaDesde": "2026-01-01", "fechaHasta": "2026-09-30", "totalItems": 3},
                 "items": items,
@@ -96,11 +100,19 @@ class ReportCalculationsTest(unittest.TestCase):
             self.assertTrue(output_path.is_file())
             with zipfile.ZipFile(output_path) as workbook_zip:
                 shared_strings = workbook_zip.read("xl/sharedStrings.xml").decode("utf-8")
+                summary_xml = workbook_zip.read("xl/worksheets/sheet1.xml").decode("utf-8")
+                requester_xml = workbook_zip.read("xl/worksheets/sheet3.xml").decode("utf-8")
+                comparison_xml = workbook_zip.read("xl/worksheets/sheet4.xml").decode("utf-8")
 
         self.assertIn("Promedio de atención (minutos)", shared_strings)
         self.assertIn("Tiempo total de atención (minutos)", shared_strings)
         self.assertIn("Horas de atención", shared_strings)
         self.assertIn("Motivo más solicitado por los 5 principales solicitantes", shared_strings)
+        self.assertGreater(summary_xml.count("<f>"), 15)
+        self.assertIn("COUNTA('Detalle'!$A:$A)-1", summary_xml)
+        self.assertIn("COUNTIF('Detalle'!$D:$D,$A", summary_xml)
+        self.assertIn("COUNTIF('Detalle'!$C:$C,$B", requester_xml)
+        self.assertIn("COUNTIF('Detalle anterior'!$I:$I,$A", comparison_xml)
 
 
 if __name__ == "__main__":
