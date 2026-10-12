@@ -110,6 +110,11 @@ def average_resolution_minutes(items: list[dict[str, Any]]) -> float:
     return sum(values) / len(values)
 
 
+def total_resolution_minutes(items: list[dict[str, Any]]) -> float:
+    values = [normalize_minutes(item["tiempo_minutos"]) for item in items if item.get("tiempo_minutos") is not None]
+    return sum(values)
+
+
 def average_kpi_percentage(items: list[dict[str, Any]]) -> float:
     values = [float(item["porcentaje"]) for item in items if item.get("porcentaje") is not None]
     return sum(values) / len(values) if values else 0.0
@@ -345,10 +350,39 @@ def build_requester_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def build_top_requester_service_rows(
+    items: list[dict[str, Any]],
+    requester_rows: list[dict[str, Any]],
+    limit: int = 5,
+) -> list[tuple[int, str, str, int]]:
+    top_requesters = [row["name"] for row in requester_rows[:limit]]
+    services_by_requester: dict[str, Counter[str]] = {
+        requester: Counter() for requester in top_requesters
+    }
+
+    for item in items:
+        requester = str(item.get("solicitante") or "Sin dato").strip() or "Sin dato"
+        if requester not in services_by_requester:
+            continue
+        service = str(item.get("tipo_servicio") or "Sin dato").strip() or "Sin dato"
+        services_by_requester[requester][service] += 1
+
+    rows: list[tuple[int, str, str, int]] = []
+    for position, requester in enumerate(top_requesters, start=1):
+        ranked_services = sorted(
+            services_by_requester[requester].items(),
+            key=lambda entry: (-entry[1], entry[0].casefold()),
+        )
+        service, total = ranked_services[0] if ranked_services else ("Sin dato", 0)
+        rows.append((position, requester, service, total))
+    return rows
+
+
 def write_requester_sheet(
     workbook: xlsxwriter.Workbook,
     worksheet: xlsxwriter.worksheet.Worksheet,
     rows: list[dict[str, Any]],
+    service_rows: list[tuple[int, str, str, int]],
 ) -> None:
     title_fmt = workbook.add_format({"bold": True, "font_size": 18, "font_color": "#16324F"})
     subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
@@ -398,6 +432,116 @@ def write_requester_sheet(
         chart.set_x_axis({"major_gridlines": {"visible": False}})
         chart.set_size({"width": 720, "height": 360})
         worksheet.insert_chart("G4", chart)
+
+    service_table_row = max(len(rows) + 6, 23)
+    write_requester_service_table(
+        workbook,
+        worksheet,
+        service_table_row,
+        service_rows,
+    )
+
+
+def write_requester_service_table(
+    workbook: xlsxwriter.Workbook,
+    worksheet: xlsxwriter.worksheet.Worksheet,
+    start_row: int,
+    rows: list[tuple[int, str, str, int]],
+) -> int:
+    title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
+    subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
+    header_fmt = workbook.add_format({
+        "bold": True,
+        "bg_color": "#D9EAF7",
+        "border": 1,
+        "font_color": "#16324F",
+        "align": "center",
+    })
+    text_fmt = workbook.add_format({"border": 1})
+    number_fmt = workbook.add_format({"border": 1, "align": "center"})
+
+    worksheet.write(start_row, 0, "Servicio más solicitado por los 5 principales solicitantes", title_fmt)
+    worksheet.write(
+        start_row + 1,
+        0,
+        "El servicio principal se determina por cantidad de tickets en el rango seleccionado.",
+        subtitle_fmt,
+    )
+    header_row = start_row + 2
+    for column, label in enumerate(["Posición", "Solicitante", "Servicio más solicitado", "Tickets"]):
+        worksheet.write(header_row, column, label, header_fmt)
+
+    if not rows:
+        worksheet.merge_range(header_row + 1, 0, header_row + 1, 3, "Sin datos en el rango seleccionado", text_fmt)
+        return 4
+
+    for offset, (position, requester, service, total) in enumerate(rows, start=1):
+        row = header_row + offset
+        worksheet.write_number(row, 0, position, number_fmt)
+        worksheet.write(row, 1, requester, text_fmt)
+        worksheet.write(row, 2, service, text_fmt)
+        worksheet.write_number(row, 3, total, number_fmt)
+
+    return len(rows) + 4
+
+
+def write_support_workload_block(
+    worksheet: xlsxwriter.worksheet.Worksheet,
+    workbook: xlsxwriter.Workbook,
+    title: str,
+    start_row: int,
+    rows: list[tuple[str, int, float]],
+    color: str,
+) -> int:
+    title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
+    header_fmt = workbook.add_format({
+        "bold": True,
+        "bg_color": "#D9EAF7",
+        "border": 1,
+        "font_color": "#16324F",
+    })
+    label_fmt = workbook.add_format({"border": 1})
+    number_fmt = workbook.add_format({"border": 1, "align": "center"})
+    hours_fmt = workbook.add_format({"border": 1, "align": "center", "num_format": '0.00 "h"'})
+
+    worksheet.write(start_row, 0, title, title_fmt)
+    header_row = start_row + 1
+    for column, label in enumerate(["Usuario de soporte", "Atenciones", "Horas de atención"]):
+        worksheet.write(header_row, column, label, header_fmt)
+
+    for index, (assignee, attentions, hours) in enumerate(rows, start=1):
+        row = header_row + index
+        worksheet.write(row, 0, assignee, label_fmt)
+        worksheet.write_number(row, 1, attentions, number_fmt)
+        worksheet.write_number(row, 2, hours, hours_fmt)
+
+    chart_height = max(240, 70 + len(rows) * 28)
+    if rows:
+        last_data_row = header_row + len(rows)
+        chart = workbook.add_chart({"type": "bar"})
+        chart.add_series({
+            "name": "Atenciones",
+            "categories": [worksheet.name, header_row + 1, 0, last_data_row, 0],
+            "values": [worksheet.name, header_row + 1, 1, last_data_row, 1],
+            "fill": {"color": color},
+            "border": {"color": color},
+            "data_labels": {"value": True},
+        })
+        chart.set_title({"name": title})
+        chart.set_legend({"none": True})
+        chart.set_chartarea({"border": {"none": True}})
+        chart.set_plotarea({"border": {"none": True}})
+        chart.set_x_axis({"major_gridlines": {"visible": False}})
+        chart.set_y_axis({"reverse": True})
+        chart.set_size({"width": 620, "height": chart_height})
+        chart.set_style(10)
+        worksheet.insert_chart(start_row, 4, chart, {"x_offset": 10, "y_offset": 4})
+    else:
+        worksheet.write(header_row + 1, 0, "Sin datos en el rango seleccionado", label_fmt)
+        worksheet.write_blank(header_row + 1, 1, None, number_fmt)
+        worksheet.write_blank(header_row + 1, 2, None, hours_fmt)
+
+    return max(len(rows) + 4, math.ceil(chart_height / 20) + 1)
 
 
 def write_chart_block(
@@ -569,6 +713,9 @@ def write_support_kpi_sheet(
         "bg_color": "#D9EAF7",
         "border": 1,
         "font_color": "#16324F",
+        "align": "center",
+        "valign": "vcenter",
+        "text_wrap": True,
     })
     card_value_fmt = workbook.add_format({
         "font_size": 16,
@@ -589,14 +736,15 @@ def write_support_kpi_sheet(
     total_items = len(items)
     resolved_items = sum(1 for item in items if item.get("estado") == "RESUELTO")
     avg_minutes = average_resolution_minutes(items)
+    total_minutes = total_resolution_minutes(items)
     fulfillment = percentage(resolved_items, total_items)
-    avg_hours = avg_minutes / 60
 
     cards = [
         ("Total de tickets solicitados", total_items),
         ("Tickets resueltos", resolved_items),
         ("Cumplimiento de tickets", f"{fulfillment:.1f}%"),
-        ("Promedio de atención (horas)", f"{avg_hours:.1f} h"),
+        ("Promedio de atención (minutos)", f"{avg_minutes:.1f} min"),
+        ("Tiempo total de atención (minutos)", f"{total_minutes:.0f} min"),
     ]
     for index, (label, value) in enumerate(cards):
         col = index * 3
@@ -740,6 +888,7 @@ def write_comparison_sheet(
             True,
         ),
         ("Promedio minutos", average_resolution_minutes(current_items), average_resolution_minutes(previous_items), False),
+        ("Total minutos", total_resolution_minutes(current_items), total_resolution_minutes(previous_items), False),
         ("KPI promedio", average_kpi_percentage(current_items) / 100, average_kpi_percentage(previous_items) / 100, True),
     ]
 
@@ -817,6 +966,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         support_groups = dict(fallback_groups)
 
     requester_rows = build_requester_rows(items)
+    requester_service_rows = build_top_requester_service_rows(items, requester_rows)
     used_sheet_names = {"detalle", "resumen kpi", "solicitantes", "comparativa", "detalle anterior"}
     support_sheet_names = {
         assignee: allocate_sheet_name(f"Soporte - {assignee}", used_sheet_names)
@@ -867,7 +1017,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     link_fmt = workbook.add_format({"font_color": "#0B6E81", "underline": True, "border": 1})
 
     write_ticket_sheet(workbook, detail_sheet, items)
-    write_requester_sheet(workbook, requester_sheet, requester_rows)
+    write_requester_sheet(workbook, requester_sheet, requester_rows, requester_service_rows)
     if comparison_sheet is not None and previous_detail_sheet is not None and previous_meta is not None:
         write_comparison_sheet(
             workbook,
@@ -884,6 +1034,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     summary_sheet.set_column(3, 4, 18)
     summary_sheet.set_column(6, 7, 18)
     summary_sheet.set_column(9, 10, 18)
+    summary_sheet.set_column(12, 13, 18)
     summary_sheet.set_column(14, 14, 34)
 
     summary_sheet.write("A1", "Reporte KPI de tickets", title_fmt)
@@ -893,14 +1044,15 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     total_items = len(items)
     resolved_items = sum(1 for item in items if item.get("estado") == "RESUELTO")
     avg_minutes = average_resolution_minutes(items)
+    total_minutes = total_resolution_minutes(items)
     fulfillment = percentage(resolved_items, total_items)
-    avg_hours = avg_minutes / 60
 
     cards = [
         ("Total de tickets solicitados", total_items),
         ("Tickets resueltos", resolved_items),
         ("Cumplimiento de tickets", f"{fulfillment:.1f}%"),
-        ("Promedio de atención (horas)", f"{avg_hours:.1f} h"),
+        ("Promedio de atención (minutos)", f"{avg_minutes:.1f} min"),
+        ("Tiempo total de atención (minutos)", f"{total_minutes:.0f} min"),
     ]
 
     for index, (label, value) in enumerate(cards):
@@ -913,7 +1065,10 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     channel_rows = build_series(items, "canal_oficina")
     time_rows = build_time_series(items)
     support_rows = sorted(
-        ((assignee, len(group_items)) for assignee, group_items in support_groups.items()),
+        (
+            (assignee, len(group_items), total_resolution_minutes(group_items) / 60)
+            for assignee, group_items in support_groups.items()
+        ),
         key=lambda entry: (-entry[1], entry[0].casefold()),
     )
     requester_chart_rows = [(row["name"], row["total"]) for row in requester_rows[:10]]
@@ -930,7 +1085,14 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     next_row += 1
     next_row += write_chart_block(summary_sheet, workbook, "Tiempo de respuesta", next_row, 0, time_rows, "#9467BD")
     next_row += 1
-    next_row += write_chart_block(summary_sheet, workbook, "Tickets por usuario de soporte", next_row, 0, support_rows, "#0B6E81")
+    next_row += write_support_workload_block(
+        summary_sheet,
+        workbook,
+        "Tickets por usuario de soporte",
+        next_row,
+        support_rows,
+        "#0B6E81",
+    )
     next_row += 1
     next_row += write_chart_block(
         summary_sheet,
@@ -941,7 +1103,14 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         requester_chart_rows,
         "#D08C32",
     )
-    next_row += 2
+    next_row += 1
+    next_row += write_requester_service_table(
+        workbook,
+        summary_sheet,
+        next_row,
+        requester_service_rows,
+    )
+    next_row += 1
     unresolved_section_row = next_row
     write_unresolved_ticket_section(workbook, summary_sheet, items, unresolved_section_row)
 
