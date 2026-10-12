@@ -493,12 +493,38 @@ def write_history_chart(
 
     if rows:
         last_row = header_row + len(rows)
-        chart = workbook.add_chart({"type": "line"})
-        for name, column, color in [
+        series = [
             ("Tickets solicitados", 1, "#1F77B4"),
-            ("Tickets resueltos", 2, "#0B6E81"),
-        ]:
-            chart.add_series({
+            ("Tickets resueltos", 2, "#2CA02C"),
+        ]
+
+        column_chart = workbook.add_chart({"type": "column"})
+        for name, column, color in series:
+            column_chart.add_series({
+                "name": name,
+                "categories": [worksheet.name, header_row + 1, 0, last_row, 0],
+                "values": [worksheet.name, header_row + 1, column, last_row, column],
+                "fill": {"color": color},
+                "border": {"color": color},
+                "data_labels": {"value": True},
+            })
+        column_chart.set_title({"name": "Comparación mensual: solicitados vs resueltos"})
+        column_chart.set_legend({"position": "bottom"})
+        column_chart.set_chartarea({"border": {"none": True}})
+        column_chart.set_plotarea({"border": {"none": True}})
+        column_chart.set_x_axis({"name": "Mes"})
+        column_chart.set_y_axis({
+            "name": "Cantidad de tickets",
+            "min": 0,
+            "major_gridlines": {"visible": True},
+        })
+        column_chart.set_size({"width": 560, "height": 320})
+        column_chart.set_style(10)
+        worksheet.insert_chart(start_row, 4, column_chart, {"x_offset": 10, "y_offset": 4})
+
+        line_chart = workbook.add_chart({"type": "line"})
+        for name, column, color in series:
+            line_chart.add_series({
                 "name": name,
                 "categories": [worksheet.name, header_row + 1, 0, last_row, 0],
                 "values": [worksheet.name, header_row + 1, column, last_row, column],
@@ -510,15 +536,19 @@ def write_history_chart(
                     "fill": {"color": "#FFFFFF"},
                 },
             })
-        chart.set_title({"name": title})
-        chart.set_legend({"position": "bottom"})
-        chart.set_chartarea({"border": {"none": True}})
-        chart.set_plotarea({"border": {"none": True}})
-        chart.set_x_axis({"name": "Mes"})
-        chart.set_y_axis({"name": "Cantidad de tickets", "min": 0, "major_gridlines": {"visible": True}})
-        chart.set_size({"width": 700, "height": 320})
-        chart.set_style(10)
-        worksheet.insert_chart(start_row, 4, chart, {"x_offset": 10, "y_offset": 4})
+        line_chart.set_title({"name": "Tendencia mensual: solicitados vs resueltos"})
+        line_chart.set_legend({"position": "bottom"})
+        line_chart.set_chartarea({"border": {"none": True}})
+        line_chart.set_plotarea({"border": {"none": True}})
+        line_chart.set_x_axis({"name": "Mes"})
+        line_chart.set_y_axis({
+            "name": "Cantidad de tickets",
+            "min": 0,
+            "major_gridlines": {"visible": True},
+        })
+        line_chart.set_size({"width": 560, "height": 320})
+        line_chart.set_style(10)
+        worksheet.insert_chart(start_row, 13, line_chart, {"x_offset": 10, "y_offset": 4})
 
     return max(len(rows) + 4, 18)
 
