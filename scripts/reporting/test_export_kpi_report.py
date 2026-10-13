@@ -7,7 +7,7 @@ from pathlib import Path
 
 from export_kpi_report import (
     build_requester_rows,
-    build_top_requester_reason_rows,
+    build_top_requester_reason_matrix,
     build_workbook,
     total_resolution_minutes,
 )
@@ -58,7 +58,7 @@ class ReportCalculationsTest(unittest.TestCase):
 
         self.assertEqual(total_resolution_minutes(items), 121)
 
-    def test_top_five_requesters_include_their_full_reason_breakdown(self) -> None:
+    def test_top_five_requesters_are_crossed_with_their_reasons(self) -> None:
         items = [
             make_ticket(1, "Ana", "Correo", "Soporte 1", 30, "Contraseña"),
             make_ticket(2, "Ana", "Acceso", "Soporte 1", 30, "Instalación"),
@@ -68,12 +68,11 @@ class ReportCalculationsTest(unittest.TestCase):
         ]
 
         requester_rows = build_requester_rows(items)
-        result = build_top_requester_reason_rows(items, requester_rows)
+        reasons, rows = build_top_requester_reason_matrix(items, requester_rows)
 
-        self.assertEqual(result[0], (1, "Ana", "Contraseña", 2))
-        self.assertEqual(result[1], (1, "Ana", "Instalación", 1))
-        self.assertEqual(result[2], (2, "Bruno", "Actualización", 1))
-        self.assertEqual(result[3], (2, "Bruno", "Conectividad", 1))
+        self.assertEqual(reasons, ["Contraseña", "Actualización", "Conectividad", "Instalación"])
+        self.assertEqual(rows[0], ("Ana", [2, 0, 0, 1], 3))
+        self.assertEqual(rows[1], ("Bruno", [0, 1, 1, 0], 2))
 
     def test_workbook_contains_new_management_metrics_and_tables(self) -> None:
         items = [
@@ -109,12 +108,14 @@ class ReportCalculationsTest(unittest.TestCase):
         self.assertIn("Promedio de atención (minutos)", shared_strings)
         self.assertIn("Tiempo total de atención (horas)", shared_strings)
         self.assertIn("Horas de atención", shared_strings)
-        self.assertIn("Desglose de motivos de los 5 principales solicitantes", shared_strings)
+        self.assertIn("Matriz de motivos de los 5 principales solicitantes", shared_strings)
         self.assertGreater(summary_xml.count("<f>"), 15)
         self.assertIn("COUNTA('Detalle'!$A:$A)-1", summary_xml)
         self.assertIn("SUM('Detalle'!$O:$O)/60", summary_xml)
         self.assertIn("COUNTIF('Detalle'!$D:$D,$A", summary_xml)
+        self.assertIn("COUNTIFS('Detalle'!$C:$C,$A", summary_xml)
         self.assertIn("COUNTIF('Detalle'!$C:$C,$B", requester_xml)
+        self.assertIn("COUNTIFS('Detalle'!$C:$C,$B", requester_xml)
         self.assertIn("COUNTIF('Detalle anterior'!$I:$I,$A", comparison_xml)
 
 

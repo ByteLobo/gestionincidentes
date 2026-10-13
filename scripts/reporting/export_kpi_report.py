@@ -383,11 +383,11 @@ def build_requester_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def build_top_requester_reason_rows(
+def build_top_requester_reason_matrix(
     items: list[dict[str, Any]],
     requester_rows: list[dict[str, Any]],
     limit: int = 5,
-) -> list[tuple[int, str, str, int]]:
+) -> tuple[list[str], list[tuple[str, list[int], int]]]:
     top_requesters = [row["name"] for row in requester_rows[:limit]]
     reasons_by_requester: dict[str, Counter[str]] = {
         requester: Counter() for requester in top_requesters
@@ -400,27 +400,32 @@ def build_top_requester_reason_rows(
         reason = str(item.get("motivo_servicio") or "Sin dato").strip() or "Sin dato"
         reasons_by_requester[requester][reason] += 1
 
-    rows: list[tuple[int, str, str, int]] = []
-    for position, requester in enumerate(top_requesters, start=1):
-        ranked_reasons = sorted(
-            reasons_by_requester[requester].items(),
-            key=lambda entry: (-entry[1], entry[0].casefold()),
+    reason_totals = Counter({
+        reason: sum(counter[reason] for counter in reasons_by_requester.values())
+        for reason in {
+            reason
+            for counter in reasons_by_requester.values()
+            for reason in counter
+        }
+    })
+    reasons = sorted(reason_totals, key=lambda reason: (-reason_totals[reason], reason.casefold()))
+    rows = [
+        (
+            requester,
+            [reasons_by_requester[requester][reason] for reason in reasons],
+            sum(reasons_by_requester[requester].values()),
         )
-        if not ranked_reasons:
-            rows.append((position, requester, "Sin dato", 0))
-            continue
-        rows.extend(
-            (position, requester, reason, total)
-            for reason, total in ranked_reasons
-        )
-    return rows
+        for requester in top_requesters
+    ]
+    return reasons, rows
 
 
 def write_requester_sheet(
     workbook: xlsxwriter.Workbook,
     worksheet: xlsxwriter.worksheet.Worksheet,
     rows: list[dict[str, Any]],
-    reason_rows: list[tuple[int, str, str, int]],
+    reason_labels: list[str],
+    reason_rows: list[tuple[str, list[int], int]],
 ) -> None:
     title_fmt = workbook.add_format({"bold": True, "font_size": 18, "font_color": "#16324F"})
     subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
@@ -439,6 +444,8 @@ def write_requester_sheet(
     worksheet.set_column("A:A", 10)
     worksheet.set_column("B:B", 34)
     worksheet.set_column("C:E", 14)
+    if reason_labels:
+        worksheet.set_column(2, 2 + len(reason_labels), 18)
     worksheet.freeze_panes(4, 0)
 
     headers = ["Posicion", "Solicitante", "Total", "Resueltos", "Abiertos"]
@@ -492,8 +499,10 @@ def write_requester_sheet(
         workbook,
         worksheet,
         reason_table_row,
+        reason_labels,
         reason_rows,
         formula_source_sheet="Detalle",
+        start_col=1,
     )
 
 
@@ -501,8 +510,10 @@ def write_requester_reason_table(
     workbook: xlsxwriter.Workbook,
     worksheet: xlsxwriter.worksheet.Worksheet,
     start_row: int,
-    rows: list[tuple[int, str, str, int]],
+    reasons: list[str],
+    rows: list[tuple[str, list[int], int]],
     formula_source_sheet: str | None = None,
+    start_col: int = 0,
 ) -> int:
     title_fmt = workbook.add_format({"bold": True, "font_size": 12, "font_color": "#16324F"})
     subtitle_fmt = workbook.add_format({"font_size": 10, "font_color": "#4B5D70"})
@@ -513,38 +524,85 @@ def write_requester_reason_table(
         "font_color": "#16324F",
         "align": "center",
     })
-    text_fmt = workbook.add_format({"border": 1})
-    number_fmt = workbook.add_format({"border": 1, "align": "center"})
+    text_fmt = workbook.add_format({"border": 1, "valign": "vcenter"})
+    number_fmt = workbook.add_format({"border": 1, "align": "center", "valign": "vcenter"})
+    total_fmt = workbook.add_format({
+        "bold": True,
+        "border": 1,
+        "align": "center",
+        "valign": "vcenter",
+        "bg_color": "#EAF3F8",
+        "font_color": "#16324F",
+    })
 
-    worksheet.write(start_row, 0, "Desglose de motivos de los 5 principales solicitantes", title_fmt)
+    worksheet.write(start_row, start_col, "Matriz de motivos de los 5 principales solicitantes", title_fmt)
     worksheet.write(
         start_row + 1,
-        0,
-        "Cada solicitante muestra todos sus motivos, ordenados por cantidad de tickets.",
+        start_col,
+        "Filas: solicitantes · Columnas: motivos · Celdas: cantidad de tickets.",
         subtitle_fmt,
     )
     header_row = start_row + 2
-    for column, label in enumerate(["Posición", "Solicitante", "Motivo solicitado", "Tickets"]):
-        worksheet.write(header_row, column, label, header_fmt)
+    headers = ["Solicitante", *reasons, "Total"]
+    for offset, label in enumerate(headers):
+        worksheet.write(header_row, start_col + offset, label, header_fmt)
+    worksheet.set_row(header_row, 42)
 
     if not rows:
-        worksheet.merge_range(header_row + 1, 0, header_row + 1, 3, "Sin datos en el rango seleccionado", text_fmt)
+        worksheet.merge_range(
+            header_row + 1,
+            start_col,
+            header_row + 1,
+            start_col + max(len(headers) - 1, 1),
+            "Sin datos en el rango seleccionado",
+            text_fmt,
+        )
         return 4
 
-    for offset, (position, requester, reason, total) in enumerate(rows, start=1):
+    first_reason_col = start_col + 1
+    total_col = first_reason_col + len(reasons)
+    for offset, (requester, counts, total) in enumerate(rows, start=1):
         row = header_row + offset
-        excel_row = row + 1
-        worksheet.write_number(row, 0, position, number_fmt)
-        worksheet.write(row, 1, requester, text_fmt)
-        worksheet.write(row, 2, reason, text_fmt)
-        if formula_source_sheet:
-            formula = (
-                f"=COUNTIFS({excel_column_range(formula_source_sheet, 'C')},$B{excel_row},"
-                f"{excel_column_range(formula_source_sheet, 'G')},$C{excel_row})"
+        requester_cell = xl_rowcol_to_cell(row, start_col, col_abs=True)
+        worksheet.write(row, start_col, requester, text_fmt)
+        for reason_offset, count in enumerate(counts):
+            column = first_reason_col + reason_offset
+            if formula_source_sheet:
+                reason_cell = xl_rowcol_to_cell(header_row, column, row_abs=True)
+                formula = (
+                    f"=COUNTIFS({excel_column_range(formula_source_sheet, 'C')},{requester_cell},"
+                    f"{excel_column_range(formula_source_sheet, 'G')},{reason_cell})"
+                )
+                worksheet.write_formula(row, column, formula, number_fmt, count)
+            else:
+                worksheet.write_number(row, column, count, number_fmt)
+
+        if reasons:
+            first_count_cell = xl_rowcol_to_cell(row, first_reason_col)
+            last_count_cell = xl_rowcol_to_cell(row, total_col - 1)
+            worksheet.write_formula(
+                row,
+                total_col,
+                f"=SUM({first_count_cell}:{last_count_cell})",
+                total_fmt,
+                total,
             )
-            worksheet.write_formula(row, 3, formula, number_fmt, total)
         else:
-            worksheet.write_number(row, 3, total, number_fmt)
+            worksheet.write_number(row, total_col, total, total_fmt)
+
+    if reasons:
+        worksheet.conditional_format(
+            header_row + 1,
+            first_reason_col,
+            header_row + len(rows),
+            total_col - 1,
+            {
+                "type": "data_bar",
+                "bar_color": "#9BC7D4",
+                "bar_solid": True,
+                "bar_border_color": "#6BA9BA",
+            },
+        )
 
     return len(rows) + 4
 
@@ -1134,7 +1192,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         support_groups = dict(fallback_groups)
 
     requester_rows = build_requester_rows(items)
-    requester_reason_rows = build_top_requester_reason_rows(items, requester_rows)
+    requester_reason_labels, requester_reason_rows = build_top_requester_reason_matrix(items, requester_rows)
     used_sheet_names = {"detalle", "resumen kpi", "solicitantes", "comparativa", "detalle anterior"}
     support_sheet_names = {
         assignee: allocate_sheet_name(f"Soporte - {assignee}", used_sheet_names)
@@ -1190,7 +1248,13 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     link_fmt = workbook.add_format({"font_color": "#0B6E81", "underline": True, "border": 1})
 
     write_ticket_sheet(workbook, detail_sheet, items)
-    write_requester_sheet(workbook, requester_sheet, requester_rows, requester_reason_rows)
+    write_requester_sheet(
+        workbook,
+        requester_sheet,
+        requester_rows,
+        requester_reason_labels,
+        requester_reason_rows,
+    )
     if comparison_sheet is not None and previous_detail_sheet is not None and previous_meta is not None:
         write_comparison_sheet(
             workbook,
@@ -1348,6 +1412,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
         workbook,
         summary_sheet,
         next_row,
+        requester_reason_labels,
         requester_reason_rows,
         formula_source_sheet="Detalle",
     )
