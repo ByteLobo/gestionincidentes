@@ -406,8 +406,13 @@ def build_top_requester_reason_rows(
             reasons_by_requester[requester].items(),
             key=lambda entry: (-entry[1], entry[0].casefold()),
         )
-        reason, total = ranked_reasons[0] if ranked_reasons else ("Sin dato", 0)
-        rows.append((position, requester, reason, total))
+        if not ranked_reasons:
+            rows.append((position, requester, "Sin dato", 0))
+            continue
+        rows.extend(
+            (position, requester, reason, total)
+            for reason, total in ranked_reasons
+        )
     return rows
 
 
@@ -511,15 +516,15 @@ def write_requester_reason_table(
     text_fmt = workbook.add_format({"border": 1})
     number_fmt = workbook.add_format({"border": 1, "align": "center"})
 
-    worksheet.write(start_row, 0, "Motivo más solicitado por los 5 principales solicitantes", title_fmt)
+    worksheet.write(start_row, 0, "Desglose de motivos de los 5 principales solicitantes", title_fmt)
     worksheet.write(
         start_row + 1,
         0,
-        "El motivo principal se determina por cantidad de tickets en el rango seleccionado.",
+        "Cada solicitante muestra todos sus motivos, ordenados por cantidad de tickets.",
         subtitle_fmt,
     )
     header_row = start_row + 2
-    for column, label in enumerate(["Posición", "Solicitante", "Motivo más solicitado", "Tickets"]):
+    for column, label in enumerate(["Posición", "Solicitante", "Motivo solicitado", "Tickets"]):
         worksheet.write(header_row, column, label, header_fmt)
 
     if not rows:
@@ -1175,7 +1180,7 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
     card_value_fmt = workbook.add_format(card_value_style)
     card_percent_fmt = workbook.add_format({**card_value_style, "num_format": "0.0%"})
     card_average_minutes_fmt = workbook.add_format({**card_value_style, "num_format": '0.0 "min"'})
-    card_total_minutes_fmt = workbook.add_format({**card_value_style, "num_format": '0 "min"'})
+    card_total_hours_fmt = workbook.add_format({**card_value_style, "num_format": '0.0 "h"'})
     link_header_fmt = workbook.add_format({
         "bold": True,
         "bg_color": "#D9EAF7",
@@ -1244,10 +1249,10 @@ def build_workbook(payload: dict[str, Any], output_path: Path) -> None:
             card_average_minutes_fmt,
         ),
         (
-            "Tiempo total de atención (minutos)",
-            f"=SUM({excel_column_range('Detalle', 'O')})",
-            total_minutes,
-            card_total_minutes_fmt,
+            "Tiempo total de atención (horas)",
+            f"=SUM({excel_column_range('Detalle', 'O')})/60",
+            total_minutes / 60,
+            card_total_hours_fmt,
         ),
     ]
 
